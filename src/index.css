@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  /* Utilitários customizados para mobile */
+  .min-touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  .safe-area-inset {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+@layer base {
+  /* Melhorar a experiência de toque em dispositivos móveis */
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
+  
+  /* Garantir que inputs sejam acessíveis em mobile */
+  input, select, textarea, button {
+    font-size: 16px;
+  }
+  
+  @media (min-width: 640px) {
+    input, select, textarea, button {
+      font-size: 14px;
+    }
+  }
+  
+  /* Melhorar scrolling em mobile */
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Garantir que modais sejam responsivos */
+  .modal-content {
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+}
