@@ -1,11 +1,11 @@
 import React from 'react';
 import { ArrowLeft, Calendar, DollarSign, User, Clock, CheckCircle, XCircle, AlertTriangle, TrendingUp, Calculator, CreditCard as Edit, Save, X, CreditCard } from 'lucide-react';
-import { Loan } from '../types';
-import { mockClients } from '../data/mockData';
+import { Loan, Client } from '../types';
 import { generatePaymentsFromLoan, calculateCapitalInterestMetrics, processPayment, validatePaymentData, PaymentData, PaymentProcessResult } from '../utils/paymentUtils';
 import { useRBAC } from '../hooks/useRBAC';
 import { RBAC_RESOURCES, RBAC_ACTIONS } from '../types/rbac';
 import RBACButton from './RBACButton';
+import { useClients } from '../hooks/useClients';
 
 interface LoanDetailsProps {
   loan: Loan;
@@ -15,7 +15,8 @@ interface LoanDetailsProps {
 
 const LoanDetails: React.FC<LoanDetailsProps> = ({ loan, onBack, onUpdateLoan }) => {
   const { canEdit } = useRBAC();
-  
+  const { clients } = useClients();
+
   const [editingInstallment, setEditingInstallment] = React.useState<number | null>(null);
   const [showPaymentModal, setShowPaymentModal] = React.useState<number | null>(null);
   const [editedInstallments, setEditedInstallments] = React.useState<any[]>([]);
@@ -45,7 +46,7 @@ const LoanDetails: React.FC<LoanDetailsProps> = ({ loan, onBack, onUpdateLoan })
     return generatePaymentsFromLoan(loan);
   }, [loan]);
 
-  const client = mockClients.find(c => c.id === loan.clientId);
+  const client = React.useMemo(() => clients.find(c => c.id === loan.clientId), [clients, loan.clientId]);
 
   // Calcular breakdown das parcelas baseado no installmentPlan
   const installmentBreakdown = React.useMemo(() => {

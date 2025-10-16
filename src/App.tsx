@@ -19,7 +19,6 @@ import ClientDetails from './components/ClientDetails';
 import Settings from './components/Settings';
 import FinancialDashboard from './components/FinancialDashboard';
 import { Loan, Client, Prospect, Payment } from './types';
-import { mockClients, mockLoans } from './data/mockData';
 import { RBAC_RESOURCES, RBAC_ACTIONS } from './types/rbac';
 import { initializeRBACUsers } from './data/rbacUsers';
 import { calculateClientMetrics, updateClientMetricsInDatabase } from './utils/paymentUtils';
@@ -28,8 +27,8 @@ import { useLoans } from './hooks/useLoans';
 
 function App() {
   const auth = useAuthProvider();
-  const { clients: supabaseClients, updateClient, refetch: refetchClients } = useClients();
-  const { loans: supabaseLoans, updateLoan, refetch: refetchLoans } = useLoans();
+  const { clients, loading: clientsLoading, createClient, updateClient, deleteClient, refetch: refetchClients } = useClients();
+  const { loans, loading: loansLoading, createLoan, updateLoan, refetch: refetchLoans } = useLoans();
   
   const [currentView, setCurrentView] = useState('dashboard');
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -37,30 +36,11 @@ function App() {
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  
-  // Usar dados do Supabase quando disponíveis, senão usar mock data
-  const clients = supabaseClients.length > 0 ? supabaseClients : mockClients;
-  const loans = supabaseLoans.length > 0 ? supabaseLoans : mockLoans;
-  const [localClients, setLocalClients] = useState(mockClients);
-  const [localLoans, setLocalLoans] = useState(mockLoans);
 
   // Inicializar usuários RBAC
   React.useEffect(() => {
     initializeRBACUsers();
   }, []);
-
-  // Sincronizar dados locais com Supabase
-  React.useEffect(() => {
-    if (supabaseClients.length > 0) {
-      setLocalClients(supabaseClients);
-    }
-  }, [supabaseClients]);
-
-  React.useEffect(() => {
-    if (supabaseLoans.length > 0) {
-      setLocalLoans(supabaseLoans);
-    }
-  }, [supabaseLoans]);
 
   // Mostrar tela de login se não estiver autenticado
   if (!auth.authState.isAuthenticated) {
@@ -97,16 +77,14 @@ function App() {
     setCurrentView('client-details');
   };
 
-  const handleUpdateClient = (updatedClient: Client) => {
-    const updatedClients = localClients.map(c => 
-      c.id === updatedClient.id ? updatedClient : c
-    );
-    setLocalClients(updatedClients);
-    setSelectedClient(updatedClient);
-    
-    // Atualizar no Supabase se disponível
-    if (supabaseClients.length > 0) {
-      updateClient(updatedClient.id, updatedClient).catch(console.error);
+  const handleUpdateClient = async (updatedClient: Client) => {
+    try {
+      await updateClient(updatedClient.id, updatedClient);
+      setSelectedClient(updatedClient);
+      await refetchClients();
+    } catch (error) {
+      console.error('Erro ao atualizar cliente:', error);
+      alert('Erro ao atualizar cliente. Tente novamente.');
     }
   };
 
@@ -125,87 +103,66 @@ function App() {
     setCurrentView('edit-client');
   };
 
-  const handleDeleteClient = (clientId: string) => {
+  const handleDeleteClient = async (clientId: string) => {
     // Verificar se o cliente tem empréstimos ativos
-    const clientLoans = localLoans.filter(l => l.clientId === clientId && l.status === 'active');
-    
+    const clientLoans = loans.filter(l => l.clientId === clientId && l.status === 'active');
+
     if (clientLoans.length > 0) {
       alert(`Não é possível excluir o cliente. Existem ${clientLoans.length} empréstimo(s) ativo(s) vinculado(s) a este cliente.`);
       return;
     }
-    
-    // Remover cliente e todos os empréstimos relacionados
-    const updatedClients = localClients.filter(c => c.id !== clientId);
-    const updatedLoans = localLoans.filter(l => l.clientId !== clientId);
-    
-    setLocalClients(updatedClients);
-    setLocalLoans(updatedLoans);
-    
-    // Se o cliente excluído estava selecionado, voltar para a lista
-    if (selectedClient?.id === clientId) {
-      setSelectedClient(null);
-      setCurrentView('clients');
+
+    try {
+      await deleteClient(clientId);
+
+      // Se o cliente excluído estava selecionado, voltar para a lista
+      if (selectedClient?.id === clientId) {
+        setSelectedClient(null);
+        setCurrentView('clients');
+      }
+
+      await refetchClients();
+      await refetchLoans();
+    } catch (error) {
+      console.error('Erro ao excluir cliente:', error);
+      alert('Erro ao excluir cliente. Tente novamente.');
     }
   };
 
-  const handleDeleteLoan = (loanId: string) => {
-    const updatedLoans = localLoans.filter(l => l.id !== loanId);
-    setLocalLoans(updatedLoans);
-    
-    // Se o empréstimo excluído estava selecionado, voltar para a lista
-    if (selectedLoan?.id === loanId) {
-      setSelectedLoan(null);
-      setCurrentView('loans');
+  const handleDeleteLoan = async (loanId: string) => {
+    try {
+      // TODO: Implementar deleteLoan no hook useLoans
+      // await deleteLoan(loanId);
+
+      // Se o empréstimo excluído estava selecionado, voltar para a lista
+      if (selectedLoan?.id === loanId) {
+        setSelectedLoan(null);
+        setCurrentView('loans');
+      }
+
+      await refetchLoans();
+      alert('Funcionalidade de exclusão de empréstimo em desenvolvimento');
+    } catch (error) {
+      console.error('Erro ao excluir empréstimo:', error);
+      alert('Erro ao excluir empréstimo. Tente novamente.');
     }
   };
 
-  const handleSaveClient = (clientData: Partial<Client>) => {
+  const handleSaveClient = async (clientData: Partial<Client>) => {
     console.log('🚀 Iniciando salvamento do cliente:', clientData);
-    
+
     try {
       if (selectedClient) {
         console.log('📝 Editando cliente existente:', selectedClient.id);
-        // Editando cliente existente
-        const updatedClients = localClients.map(c => 
-          c.id === selectedClient.id ? { ...c, ...clientData } : c
-        );
-        setLocalClients(updatedClients);
-        
-        // Atualizar no Supabase se disponível
-        if (supabaseClients.length > 0) {
-          updateClient(selectedClient.id, { ...selectedClient, ...clientData }).catch(console.error);
-        }
-        
+        await updateClient(selectedClient.id, { ...selectedClient, ...clientData });
         console.log('✅ Cliente atualizado com sucesso!');
       } else {
         console.log('➕ Criando novo cliente');
-        // Criando novo cliente
-        const newClient = {
-          ...clientData,
-          id: Date.now().toString(),
-          createdAt: new Date().toISOString(),
-          // Valores padrão para novos clientes
-          totalLoans: 0,
-          activeLoans: 0,
-          completedLoans: 0,
-          defaultedLoans: 0,
-          totalBorrowed: 0,
-          totalPaid: 0,
-          onTimePayments: 0,
-          latePayments: 0,
-          averagePaymentDelay: 0
-        } as Client;
-        setLocalClients([...localClients, newClient]);
-        
-        // Criar no Supabase se disponível
-        if (supabaseClients.length > 0) {
-          // Note: createClient seria chamado via useClients hook
-          refetchClients();
-        }
-        
+        await createClient(clientData);
         console.log('✅ Cliente criado com sucesso!');
       }
-      
+
+      await refetchClients();
       setCurrentView('clients');
       setSelectedClient(null);
     } catch (error) {
@@ -214,39 +171,28 @@ function App() {
     }
   };
 
-  const handleSaveLoan = (loanData: Partial<Loan>) => {
+  const handleSaveLoan = async (loanData: Partial<Loan>) => {
     console.log('Salvando empréstimo com plano personalizado:', loanData);
-    
-    if (selectedLoan) {
-      // Editando empréstimo existente
-      const updatedLoans = localLoans.map(l => 
-        l.id === selectedLoan.id ? { ...l, ...loanData } : l
-      );
-      setLocalLoans(updatedLoans);
-      
-      // Atualizar no Supabase se disponível
-      if (supabaseLoans.length > 0) {
-        updateLoan(selectedLoan.id, { ...selectedLoan, ...loanData }).catch(console.error);
+
+    try {
+      if (selectedLoan) {
+        console.log('📝 Editando empréstimo existente:', selectedLoan.id);
+        await updateLoan(selectedLoan.id, { ...selectedLoan, ...loanData });
+        console.log('✅ Empréstimo atualizado com sucesso!');
+      } else {
+        console.log('➕ Criando novo empréstimo');
+        await createLoan(loanData);
+        console.log('✅ Empréstimo criado com sucesso!');
       }
-    } else {
-      // Criando novo empréstimo
-      const newLoan = {
-        ...loanData,
-        id: Date.now().toString(),
-        createdAt: new Date().toISOString(),
-        clientName: localClients.find(c => c.id === loanData.clientId)?.name || 'Cliente não encontrado'
-      } as Loan;
-      
-      console.log('Novo empréstimo criado:', newLoan);
-      setLocalLoans([...localLoans, newLoan]);
-      
-      // Criar no Supabase se disponível
-      if (supabaseLoans.length > 0) {
-        refetchLoans();
-      }
+
+      await refetchLoans();
+      await refetchClients(); // Atualizar métricas do cliente
+      setCurrentView('loans');
+      setSelectedLoan(null);
+    } catch (error) {
+      console.error('❌ Erro ao salvar empréstimo:', error);
+      alert('Erro ao salvar empréstimo. Tente novamente.');
     }
-    setCurrentView('loans');
-    setSelectedLoan(null);
   };
 
   const handleCancelLoan = () => {
@@ -254,9 +200,10 @@ function App() {
     setSelectedLoan(null);
   };
 
-  const handleConvertProspectToClient = (prospect: Prospect) => {
-    // Converter prospect em cliente
-    const newClient: Client = {
+  const handleConvertProspectToClient = async (prospect: Prospect) => {
+    try {
+      // Converter prospect em cliente
+      const newClient: Partial<Client> = {
       id: Date.now().toString(),
       name: prospect.name,
       cpf: prospect.cpf || '',
@@ -319,11 +266,16 @@ function App() {
       onTimePayments: 0,
       latePayments: 0,
       averagePaymentDelay: 0
-    };
+      };
 
-    setLocalClients([...localClients, newClient]);
-    setCurrentView('clients');
-    alert(`Prospect ${prospect.name} convertido em cliente com sucesso! Todos os documentos foram importados automaticamente.`);
+      await createClient(newClient);
+      await refetchClients();
+      setCurrentView('clients');
+      alert(`Prospect ${prospect.name} convertido em cliente com sucesso! Todos os documentos foram importados automaticamente.`);
+    } catch (error) {
+      console.error('Erro ao converter prospect:', error);
+      alert('Erro ao converter prospect em cliente. Tente novamente.');
+    }
   };
 
   const calculateCreditScoreFromProspect = (prospect: Prospect): number => {
@@ -357,45 +309,30 @@ function App() {
   const handleUpdateLoan = async (updatedLoan: Loan) => {
     try {
       console.log('🔄 Atualizando empréstimo:', updatedLoan.id);
-      
-      // 1. Atualizar estado local
-      const updatedLoans = localLoans.map(l => 
-        l.id === updatedLoan.id ? updatedLoan : l
-      );
-      setLocalLoans(updatedLoans);
-      setSelectedLoan(updatedLoan);
-      
+
+      // 1. Atualizar no Supabase
+      await updateLoan(updatedLoan.id, updatedLoan);
+      console.log('💾 Empréstimo salvo no Supabase');
+
       // 2. Recalcular métricas do cliente
       const { calculateClientMetrics, updateClientMetricsInDatabase } = await import('./utils/paymentUtils');
-      const clientMetrics = calculateClientMetrics(updatedLoan.clientId, updatedLoans);
+      const clientMetrics = calculateClientMetrics(updatedLoan.clientId, loans);
       console.log('📊 Métricas do cliente recalculadas:', clientMetrics);
-      
-      const updatedClients = localClients.map(c => 
-        c.id === updatedLoan.clientId 
-          ? { ...c, ...clientMetrics }
-          : c
-      );
-      setLocalClients(updatedClients);
-      
-      // 3. Atualizar selectedClient se for o mesmo
+
+      // 3. Atualizar métricas no Supabase
+      await updateClientMetricsInDatabase(updatedLoan.clientId, clientMetrics);
+      console.log('✅ Métricas salvas no Supabase');
+
+      // 4. Recarregar dados
+      await refetchLoans();
+      await refetchClients();
+
+      // 5. Atualizar estado local
+      setSelectedLoan(updatedLoan);
       if (selectedClient?.id === updatedLoan.clientId) {
         setSelectedClient(prev => prev ? { ...prev, ...clientMetrics } : null);
       }
-      
-      // 4. Persistir no Supabase se disponível
-      if (supabaseLoans.length > 0) {
-        console.log('💾 Salvando no Supabase...');
-        await updateLoan(updatedLoan.id, updatedLoan);
-        await updateClientMetricsInDatabase(updatedLoan.clientId, clientMetrics);
-        console.log('✅ Dados salvos no Supabase com sucesso');
-        
-        // Recarregar dados para garantir consistência
-        refetchLoans();
-        refetchClients();
-      } else {
-        console.log('ℹ️ Supabase não disponível, usando dados locais');
-      }
-      
+
     } catch (error) {
       console.error('Erro ao atualizar empréstimo:', error);
       alert('Erro ao salvar alterações. Tente novamente.');
@@ -431,8 +368,8 @@ function App() {
               onNewLoan={handleNewLoan}
               onEditLoan={handleEditLoan}
               onDeleteLoan={handleDeleteLoan}
-              loans={localLoans}
-              clients={localClients}
+              loans={loans}
+              clients={clients}
             />
           </RBACProtectedRoute>
         );
@@ -449,8 +386,8 @@ function App() {
       case 'new-loan':
         return (
           <RBACProtectedRoute resource={RBAC_RESOURCES.LOANS} action={RBAC_ACTIONS.CREATE}>
-            <LoanForm 
-              clients={localClients}
+            <LoanForm
+              clients={clients}
               onSave={handleSaveLoan}
               onCancel={handleCancelLoan}
             />
@@ -459,8 +396,8 @@ function App() {
       case 'edit-loan':
         return selectedLoan ? (
           <RBACProtectedRoute resource={RBAC_RESOURCES.LOANS} action={RBAC_ACTIONS.UPDATE}>
-            <LoanForm 
-              clients={localClients}
+            <LoanForm
+              clients={clients}
               loan={selectedLoan}
               onSave={handleSaveLoan}
               onCancel={handleCancelLoan}
@@ -476,7 +413,7 @@ function App() {
               onViewClient={handleViewClient}
               onEditClient={handleEditClient}
               onDeleteClient={handleDeleteClient}
-              clients={localClients}
+              clients={clients}
             />
           </RBACProtectedRoute>
         );

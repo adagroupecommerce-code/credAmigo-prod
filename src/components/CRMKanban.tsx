@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, User, Phone, DollarSign, Calendar, FileText, CheckCircle, X, CreditCard as Edit, Eye, ArrowRight, AlertCircle, Clock, Target, Users, Filter, Upload, Download, Archive, Archive as Unarchive, Paperclip } from 'lucide-react';
 import { Prospect } from '../types';
-import { mockProspects } from '../data/mockProspects';
+import { useProspects } from '../hooks/useProspects';
 import { useRBAC } from '../hooks/useRBAC';
 import { RBAC_RESOURCES, RBAC_ACTIONS } from '../types/rbac';
 import RBACButton from './RBACButton';
@@ -11,7 +11,13 @@ interface CRMKanbanProps {
 }
 
 const CRMKanban: React.FC<CRMKanbanProps> = ({ onConvertToClient }) => {
-  const [prospects, setProspects] = useState<Prospect[]>(mockProspects);
+  const { prospects: supabaseProspects, createProspect, updateProspect, refetch } = useProspects();
+  const [prospects, setProspects] = useState<Prospect[]>([]);
+
+  // Sincronizar prospects do Supabase
+  React.useEffect(() => {
+    setProspects(supabaseProspects);
+  }, [supabaseProspects]);
   const [showNewProspectForm, setShowNewProspectForm] = useState(false);
   const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null);
   const [showProspectDetails, setShowProspectDetails] = useState(false);

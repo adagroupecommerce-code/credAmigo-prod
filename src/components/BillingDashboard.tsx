@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, DollarSign, AlertTriangle, CheckCircle, Clock, Filter, Search, Download, Eye, CreditCard, TrendingUp, TrendingDown, Users, FileText, X, Trash2 } from 'lucide-react';
 import { Loan, Payment, Client } from '../types';
-import { mockLoans, mockClients } from '../data/mockData';
+import { useLoans } from '../hooks/useLoans';
+import { useClients } from '../hooks/useClients';
 import { generatePaymentsFromLoan } from '../utils/paymentUtils';
 import { useRBAC } from '../hooks/useRBAC';
 import { RBAC_RESOURCES, RBAC_ACTIONS } from '../types/rbac';
@@ -14,7 +15,9 @@ interface BillingDashboardProps {
 
 const BillingDashboard: React.FC<BillingDashboardProps> = ({ onViewPayment, onDeletePayment }) => {
   const { isAdmin } = useRBAC();
-  
+  const { loans } = useLoans();
+  const { clients } = useClients();
+
   const [payments, setPayments] = useState<Payment[]>([]);
   const [filteredPayments, setFilteredPayments] = useState<Payment[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -33,14 +36,14 @@ const BillingDashboard: React.FC<BillingDashboardProps> = ({ onViewPayment, onDe
   });
 
   useEffect(() => {
-    // Gerar pagamentos a partir dos empréstimos
+    // Gerar pagamentos a partir dos empréstimos do Supabase
     const allPayments: Payment[] = [];
-    mockLoans.forEach(loan => {
+    loans.forEach(loan => {
       const loanPayments = generatePaymentsFromLoan(loan);
       allPayments.push(...loanPayments);
     });
     setPayments(allPayments);
-  }, []);
+  }, [loans]);
 
   useEffect(() => {
     let filtered = payments;
@@ -83,8 +86,8 @@ const BillingDashboard: React.FC<BillingDashboardProps> = ({ onViewPayment, onDe
     // Filtro por busca
     if (searchTerm) {
       filtered = filtered.filter(payment => {
-        const loan = mockLoans.find(l => l.id === payment.loanId);
-        const client = mockClients.find(c => c.id === loan?.clientId);
+        const loan = loans.find(l => l.id === payment.loanId);
+        const client = clients.find(c => c.id === loan?.clientId);
         return (
           client?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
           payment.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -457,8 +460,8 @@ const BillingDashboard: React.FC<BillingDashboardProps> = ({ onViewPayment, onDe
             </thead>
             <tbody className="divide-y divide-gray-200">
               {filteredPayments.map((payment) => {
-                const loan = mockLoans.find(l => l.id === payment.loanId);
-                const client = mockClients.find(c => c.id === loan?.clientId);
+                const loan = loans.find(l => l.id === payment.loanId);
+                const client = clients.find(c => c.id === loan?.clientId);
                 const isOverdue = new Date(payment.dueDate) < new Date() && payment.status === 'pending';
                 
                 return (
@@ -610,8 +613,8 @@ const BillingDashboard: React.FC<BillingDashboardProps> = ({ onViewPayment, onDe
                     <span className="text-gray-600">Cliente:</span>
                     <div className="font-medium">
                       {(() => {
-                        const loan = mockLoans.find(l => l.id === showPaymentModal.loanId);
-                        const client = mockClients.find(c => c.id === loan?.clientId);
+                        const loan = loans.find(l => l.id === showPaymentModal.loanId);
+                        const client = clients.find(c => c.id === loan?.clientId);
                         return client?.name || 'Cliente não encontrado';
                       })()}
                     </div>
@@ -797,8 +800,8 @@ const BillingDashboard: React.FC<BillingDashboardProps> = ({ onViewPayment, onDe
                 <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <div className="text-sm text-blue-800">
                     <div><strong>Cliente:</strong> {(() => {
-                      const loan = mockLoans.find(l => l.id === showDeleteModal.loanId);
-                      const client = mockClients.find(c => c.id === loan?.clientId);
+                      const loan = loans.find(l => l.id === showDeleteModal.loanId);
+                      const client = clients.find(c => c.id === loan?.clientId);
                       return client?.name || 'Cliente não encontrado';
                     })()}</div>
                     <div><strong>Valor:</strong> {formatCurrency(showDeleteModal.amount)}</div>

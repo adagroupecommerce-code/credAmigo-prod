@@ -1,7 +1,7 @@
 import React from 'react';
 import { ArrowLeft, User, Phone, Mail, MapPin, Building, FileText, Star, TrendingUp, Clock, CheckCircle, AlertTriangle, MessageSquare, Plus, Calendar, Flag, Trash2, Edit } from 'lucide-react';
 import { Client, Loan } from '../types';
-import { mockLoans } from '../data/mockData';
+import { useLoans } from '../hooks/useLoans';
 import { useRBAC } from '../hooks/useRBAC';
 import { RBAC_RESOURCES, RBAC_ACTIONS } from '../types/rbac';
 import RBACButton from './RBACButton';
@@ -15,6 +15,9 @@ interface ClientDetailsProps {
 }
 
 const ClientDetails: React.FC<ClientDetailsProps> = ({ client, onBack, onEdit, onDelete, onUpdateClient }) => {
+  const { } = useRBAC();
+  const { loans } = useLoans();
+
   const [showAddObservation, setShowAddObservation] = React.useState(false);
   const [showDeleteModal, setShowDeleteModal] = React.useState(false);
   const [newObservation, setNewObservation] = React.useState({
@@ -22,8 +25,6 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client, onBack, onEdit, o
     type: 'general' as const,
     isImportant: false
   });
-
-  const { } = useRBAC();
   
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -72,7 +73,7 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client, onBack, onEdit, o
       </div>
     );
   };
-  const clientLoans = mockLoans.filter(loan => loan.clientId === client.id);
+  const clientLoans = loans.filter(loan => loan.clientId === client.id);
 
   const handleDeleteClick = () => {
     // Verificar se há empréstimos ativos

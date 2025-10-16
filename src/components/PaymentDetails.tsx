@@ -1,7 +1,8 @@
 import React from 'react';
 import { ArrowLeft, Calendar, DollarSign, User, AlertTriangle, CheckCircle, Clock, CreditCard } from 'lucide-react';
 import { Payment, Loan, Client } from '../types';
-import { mockLoans, mockClients } from '../data/mockData';
+import { useLoans } from '../hooks/useLoans';
+import { useClients } from '../hooks/useClients';
 
 interface PaymentDetailsProps {
   payment: Payment;
@@ -10,8 +11,11 @@ interface PaymentDetailsProps {
 }
 
 const PaymentDetails: React.FC<PaymentDetailsProps> = ({ payment, onBack, onUpdatePayment }) => {
-  const loan = mockLoans.find(l => l.id === payment.loanId);
-  const client = mockClients.find(c => c.id === loan?.clientId);
+  const { loans } = useLoans();
+  const { clients } = useClients();
+
+  const loan = React.useMemo(() => loans.find(l => l.id === payment.loanId), [loans, payment.loanId]);
+  const client = React.useMemo(() => clients.find(c => c.id === loan?.clientId), [clients, loan?.clientId]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
