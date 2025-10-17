@@ -3,14 +3,19 @@
  * Returns ISO strings for start and end dates
  */
 
-export type DateFilter = 'day' | 'week' | 'month' | 'quarter' | 'semester' | 'year' | 'all';
+export type DateFilter = 'day' | 'week' | 'month' | 'quarter' | 'semester' | 'year' | 'all' | 'custom';
 
 export interface DateRange {
   from: string;
   to: string;
 }
 
-export function getDateRange(filter: DateFilter): DateRange {
+export interface CustomDateRange {
+  start: string;
+  end: string;
+}
+
+export function getDateRange(filter: DateFilter, customRange?: CustomDateRange): DateRange {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
@@ -56,6 +61,17 @@ export function getDateRange(filter: DateFilter): DateRange {
       from = new Date(today.getFullYear() - 10, 0, 1);
       break;
 
+    case 'custom':
+      // Use custom range if provided
+      if (customRange) {
+        from = new Date(customRange.start);
+        to = new Date(customRange.end);
+        to.setHours(23, 59, 59, 999);
+      } else {
+        from = new Date(today);
+      }
+      break;
+
     default:
       from = new Date(today);
   }
@@ -71,8 +87,8 @@ export function getDateRange(filter: DateFilter): DateRange {
 /**
  * Format date for display
  */
-export function formatDateRange(filter: DateFilter): string {
-  const range = getDateRange(filter);
+export function formatDateRange(filter: DateFilter, customRange?: CustomDateRange): string {
+  const range = getDateRange(filter, customRange);
   const from = new Date(range.from);
   const to = new Date(range.to);
 

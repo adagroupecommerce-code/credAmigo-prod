@@ -90,3 +90,32 @@ export async function deletePayment(id: string) {
   const { error } = await supabase.from('payments').delete().eq('id', id);
   if (error) throw error;
 }
+
+/**
+ * Mark a payment as paid
+ * Updates status, payment_date and amounts
+ */
+export async function markPaymentAsPaid(paymentId: string, payload: {
+  payment_date: string;
+  principal_amount?: number;
+  interest_amount?: number;
+  penalty?: number;
+  amount: number;
+}) {
+  const { data, error } = await supabase
+    .from('payments')
+    .update({
+      status: 'paid',
+      payment_date: payload.payment_date,
+      principal_amount: payload.principal_amount ?? null,
+      interest_amount: payload.interest_amount ?? null,
+      penalty: payload.penalty ?? 0,
+      amount: payload.amount
+    })
+    .eq('id', paymentId)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data;
+}

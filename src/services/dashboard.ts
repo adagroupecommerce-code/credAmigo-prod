@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { DateFilter, getDateRange } from '../utils/dateRange';
+import { DateFilter, getDateRange, CustomDateRange } from '../utils/dateRange';
 
 export interface DashboardKPIs {
   totalLoans: number;
@@ -19,8 +19,8 @@ export interface DashboardKPIs {
  * Get dashboard KPIs filtered by date range
  * All data comes from Supabase - NO MOCKS
  */
-export async function getDashboardKpis(filter: DateFilter = 'month'): Promise<DashboardKPIs> {
-  const { from, to } = getDateRange(filter);
+export async function getDashboardKpis(filter: DateFilter = 'month', customRange?: CustomDateRange): Promise<DashboardKPIs> {
+  const { from, to } = getDateRange(filter, customRange);
 
   // Fetch loans within date range
   const { data: loans, error: loansError } = await supabase

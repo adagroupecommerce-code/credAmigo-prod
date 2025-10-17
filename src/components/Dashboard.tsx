@@ -1,10 +1,14 @@
 import React from 'react';
 import { TrendingUp, TrendingDown, DollarSign, Users, Clock, Calendar, Filter, RefreshCw } from 'lucide-react';
 import { getDashboardKpis } from '../services/dashboard';
-import { DateFilter, getDateRange, formatDateRange } from '../utils/dateRange';
+import { DateFilter, CustomDateRange, getDateRange, formatDateRange } from '../utils/dateRange';
 
 const Dashboard = () => {
   const [dateFilter, setDateFilter] = React.useState<DateFilter>('month');
+  const [customDateRange, setCustomDateRange] = React.useState<CustomDateRange>({
+    start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+    end: new Date().toISOString().split('T')[0]
+  });
   const [data, setData] = React.useState({
     totalLoans: 0,
     activeLoans: 0,
@@ -23,7 +27,7 @@ const Dashboard = () => {
   // Reload data whenever filter changes - REAL DATA FROM SUPABASE
   React.useEffect(() => {
     loadDashboardData();
-  }, [dateFilter]);
+  }, [dateFilter, customDateRange]);
 
   const loadDashboardData = async () => {
     try {
@@ -31,7 +35,7 @@ const Dashboard = () => {
       console.log(`📊 Fetching dashboard data for period: ${dateFilter}`);
 
       // Fetch filtered data from Supabase
-      const kpis = await getDashboardKpis(dateFilter);
+      const kpis = await getDashboardKpis(dateFilter, dateFilter === 'custom' ? customDateRange : undefined);
 
       console.log('✅ Dashboard KPIs loaded:', kpis);
       setData(kpis);
@@ -129,7 +133,7 @@ const Dashboard = () => {
             <Filter className="text-gray-600" size={20} />
             <h3 className="text-base font-medium text-gray-900">Período</h3>
             <span className="text-sm text-blue-600 font-medium">
-              {formatDateRange(dateFilter)}
+              {formatDateRange(dateFilter, dateFilter === 'custom' ? customDateRange : undefined)}
             </span>
           </div>
 
@@ -141,7 +145,8 @@ const Dashboard = () => {
               { value: 'quarter' as DateFilter, label: 'Trimestre' },
               { value: 'semester' as DateFilter, label: 'Semestre' },
               { value: 'year' as DateFilter, label: 'Ano' },
-              { value: 'all' as DateFilter, label: 'Todos' }
+              { value: 'all' as DateFilter, label: 'Todos' },
+              { value: 'custom' as DateFilter, label: 'Personalizado' }
             ].map(({ value, label }) => (
               <button
                 key={value}
@@ -156,6 +161,26 @@ const Dashboard = () => {
               </button>
             ))}
           </div>
+
+          {/* Custom Date Range Inputs */}
+          {dateFilter === 'custom' && (
+            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center pt-3 border-t border-gray-200">
+              <label className="text-sm font-medium text-gray-700">De:</label>
+              <input
+                type="date"
+                value={customDateRange.start}
+                onChange={(e) => setCustomDateRange(prev => ({ ...prev, start: e.target.value }))}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              />
+              <label className="text-sm font-medium text-gray-700">Até:</label>
+              <input
+                type="date"
+                value={customDateRange.end}
+                onChange={(e) => setCustomDateRange(prev => ({ ...prev, end: e.target.value }))}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              />
+            </div>
+          )}
 
           {/* Period Info */}
           <div className="flex items-center gap-2 text-sm text-gray-600 pt-2 border-t border-gray-200">

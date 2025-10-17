@@ -58,7 +58,7 @@ export async function createProspect(payload: {
       assigned_to: payload.assigned_to ?? null,
       expected_close_date: payload.expected_close_date ?? null,
     })
-    .select('id')
+    .select('*')
     .single();
 
   if (error) throw error;
