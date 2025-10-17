@@ -1,39 +1,80 @@
-import { supabase } from '@/lib/supabase';
+import { supabase } from '../lib/supabase';
+import { DateFilter, getDateRange } from '../utils/dateRange';
 
-export async function getDashboardKpis() {
-  const [
-    { data: loans },
-    { data: payments },
-    { data: clients }
-  ] = await Promise.all([
-    supabase.from('loans').select('amount, status, remaining_amount, total_amount'),
-    supabase.from('payments').select('amount, status, due_date'),
-    supabase.from('clients').select('id')
-  ]);
+export interface DashboardKPIs {
+  totalLoans: number;
+  activeLoans: number;
+  totalLent: number;
+  totalReceived: number;
+  pendingAmount: number;
+  overdueAmount: number;
+  monthlyRevenue: number;
+  defaultRate: number;
+  completedLoans: number;
+  totalClients: number;
+  defaultedLoans: number;
+}
 
-  const totalLoans = (loans ?? []).length;
-  const activeLoans = (loans ?? []).filter((l: any) => l.status === 'active').length;
-  const totalLent = (loans ?? []).reduce((s: number, l: any) => s + Number(l.amount || 0), 0);
+/**
+ * Get dashboard KPIs filtered by date range
+ * All data comes from Supabase - NO MOCKS
+ */
+export async function getDashboardKpis(filter: DateFilter = 'month'): Promise<DashboardKPIs> {
+  const { from, to } = getDateRange(filter);
 
-  const totalReceived = (payments ?? [])
-    .filter((p: any) => p.status === 'paid')
-    .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+  // Fetch loans within date range
+  const { data: loans, error: loansError } = await supabase
+    .from('loans')
+    .select('id, amount, status, remaining_amount, total_amount, start_date, created_at')
+    .gte('created_at', from)
+    .lte('created_at', to);
 
-  const pendingAmount = (loans ?? [])
-    .filter((l: any) => l.status === 'active')
-    .reduce((s: number, l: any) => s + Number(l.remaining_amount || 0), 0);
+  if (loansError) {
+    console.error('Error fetching loans:', loansError);
+  }
 
-  const today = new Date().toISOString().split('T')[0];
-  const overdueAmount = (payments ?? [])
-    .filter((p: any) => p.status === 'pending' && p.due_date < today)
-    .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+  // Fetch payments within date range (by payment_date or due_date)
+  const { data: payments, error: paymentsError } = await supabase
+    .from('payments')
+    .select('id, amount, status, due_date, payment_date, created_at')
+    .gte('created_at', from)
+    .lte('created_at', to);
 
-  const completedLoans = (loans ?? []).filter((l: any) => l.status === 'completed').length;
-  const monthlyRevenue = totalReceived / Math.max(totalLoans, 1);
+  if (paymentsError) {
+    console.error('Error fetching payments:', paymentsError);
+  }
 
-  const defaultRate = totalLoans > 0
-    ? ((loans ?? []).filter((l: any) => l.status === 'defaulted').length / totalLoans) * 100
-    : 0;
+  // Fetch clients (can be filtered or just count all)
+  const { count: totalClients } = await supabase
+    .from('clients')
+    .select('id', { count: 'exact', head: true });
+
+  // Calculate metrics from real data
+  const loansList = loans || [];
+  const paymentsList = payments || [];
+
+  const totalLoans = loansList.length;
+  const activeLoans = loansList.filter(l => l.status === 'active').length;
+  const completedLoans = loansList.filter(l => l.status === 'completed').length;
+  const defaultedLoans = loansList.filter(l => l.status === 'defaulted').length;
+
+  const totalLent = loansList.reduce((sum, l) => sum + Number(l.amount || 0), 0);
+
+  const totalReceived = paymentsList
+    .filter(p => p.status === 'paid')
+    .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+
+  const pendingAmount = loansList
+    .filter(l => l.status === 'active')
+    .reduce((sum, l) => sum + Number(l.remaining_amount || 0), 0);
+
+  const today = new Date().toISOString();
+  const overdueAmount = paymentsList
+    .filter(p => p.status === 'pending' && p.due_date < today)
+    .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+
+  const monthlyRevenue = totalReceived;
+  const defaultRate = totalLoans > 0 ? (defaultedLoans / totalLoans) * 100 : 0;
 
   return {
     totalLoans,
@@ -45,6 +86,44 @@ export async function getDashboardKpis() {
     monthlyRevenue,
     defaultRate,
     completedLoans,
-    totalClients: (clients ?? []).length,
+    totalClients: totalClients || 0,
+    defaultedLoans
+  };
+}
+
+/**
+ * Get recent activities from Supabase
+ */
+export async function getRecentActivities(limit: number = 10) {
+  const { data: recentPayments } = await supabase
+    .from('payments')
+    .select(`
+      id,
+      amount,
+      status,
+      payment_date,
+      created_at,
+      loans!inner(
+        clients!inner(name)
+      )
+    `)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  const { data: recentLoans } = await supabase
+    .from('loans')
+    .select(`
+      id,
+      amount,
+      status,
+      created_at,
+      clients!inner(name)
+    `)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  return {
+    payments: recentPayments || [],
+    loans: recentLoans || []
   };
 }
