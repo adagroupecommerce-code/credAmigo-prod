@@ -3,7 +3,7 @@ import { Calendar, DollarSign, AlertTriangle, CheckCircle, Clock, Filter, Search
 import { Loan, Payment, Client } from '../types';
 import { useLoans } from '../hooks/useLoans';
 import { useClients } from '../hooks/useClients';
-import { generatePaymentsFromLoan } from '../utils/paymentUtils';
+import { getAllPayments } from '../services/payments';
 import { useRBAC } from '../hooks/useRBAC';
 import { RBAC_RESOURCES, RBAC_ACTIONS } from '../types/rbac';
 import RBACButton from './RBACButton';
@@ -28,6 +28,7 @@ const BillingDashboard: React.FC<BillingDashboardProps> = ({ onViewPayment, onDe
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState<Payment | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState<Payment | null>(null);
+  const [loading, setLoading] = useState(true);
   const [paymentData, setPaymentData] = useState({
     paymentDate: new Date().toISOString().split('T')[0],
     capitalPaid: 0,
@@ -35,15 +36,40 @@ const BillingDashboard: React.FC<BillingDashboardProps> = ({ onViewPayment, onDe
     totalPaid: 0
   });
 
+  // Fetch payments from Supabase (FONTE DE VERDADE)
+  const fetchPayments = async () => {
+    try {
+      setLoading(true);
+      const data = await getAllPayments();
+
+      // Transformar para formato Payment
+      const transformedPayments: Payment[] = data.map((p: any) => ({
+        id: p.id,
+        loanId: p.loan_id,
+        installmentNumber: p.installment_number,
+        amount: p.amount,
+        principalAmount: p.principal_amount || 0,
+        interestAmount: p.interest_amount || 0,
+        penalty: p.penalty || 0,
+        dueDate: p.due_date,
+        paymentDate: p.payment_date,
+        status: p.status,
+        clientName: p.loans?.clients?.name || 'Cliente Desconhecido',
+        loanAmount: p.loans?.amount || 0
+      }));
+
+      setPayments(transformedPayments);
+      console.log('✅ Payments loaded from Supabase:', transformedPayments.length);
+    } catch (error) {
+      console.error('❌ Error loading payments:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    // Gerar pagamentos a partir dos empréstimos do Supabase
-    const allPayments: Payment[] = [];
-    loans.forEach(loan => {
-      const loanPayments = generatePaymentsFromLoan(loan);
-      allPayments.push(...loanPayments);
-    });
-    setPayments(allPayments);
-  }, [loans]);
+    fetchPayments();
+  }, []);
 
   useEffect(() => {
     let filtered = payments;
@@ -165,42 +191,42 @@ const BillingDashboard: React.FC<BillingDashboardProps> = ({ onViewPayment, onDe
     });
   };
 
-  const handleConfirmPayment = () => {
+  const handleConfirmPayment = async () => {
     if (!showPaymentModal) return;
 
-    // Registrar o pagamento com detalhamento de capital e juros
-    const paymentRecord = {
-      paymentId: showPaymentModal.id,
-      loanId: showPaymentModal.loanId,
-      installmentNumber: showPaymentModal.installmentNumber,
-      paymentDate: paymentData.paymentDate,
-      capitalPaid: paymentData.capitalPaid,
-      interestPaid: paymentData.interestPaid,
-      totalPaid: paymentData.totalPaid,
-      originalAmount: showPaymentModal.amount,
-      isPartialPayment: paymentData.totalPaid < showPaymentModal.amount,
-      timestamp: new Date().toISOString()
-    };
+    try {
+      // Importar função de persistência
+      const { markInstallmentPaid } = await import('../services/payments');
 
-    // Salvar no localStorage para tracking (em produção seria banco de dados)
-    const existingRecords = JSON.parse(localStorage.getItem('payment_records') || '[]');
-    existingRecords.push(paymentRecord);
-    localStorage.setItem('payment_records', JSON.stringify(existingRecords));
+      // Salvar pagamento no Supabase
+      await markInstallmentPaid(showPaymentModal.id, {
+        payment_date: paymentData.paymentDate,
+        total: Number(paymentData.totalPaid),
+        principal_amount: Number(paymentData.capitalPaid),
+        interest_amount: Number(paymentData.interestPaid),
+        penalty: 0
+      });
 
-    // Atualizar status da parcela
-    handlePaymentUpdate(showPaymentModal.id, 'paid', paymentData.paymentDate);
+      console.log('✅ Pagamento salvo no Supabase!');
 
-    // Fechar modal e limpar dados
-    setShowPaymentModal(null);
-    setPaymentData({
-      paymentDate: new Date().toISOString().split('T')[0],
-      capitalPaid: 0,
-      interestPaid: 0,
-      totalPaid: 0
-    });
+      // Recarregar payments do banco
+      await fetchPayments();
 
-    // Feedback para o usuário
-    alert(`Pagamento registrado com sucesso!\nCapital: ${formatCurrency(paymentData.capitalPaid)}\nJuros: ${formatCurrency(paymentData.interestPaid)}\nTotal: ${formatCurrency(paymentData.totalPaid)}`);
+      // Fechar modal e limpar dados
+      setShowPaymentModal(null);
+      setPaymentData({
+        paymentDate: new Date().toISOString().split('T')[0],
+        capitalPaid: 0,
+        interestPaid: 0,
+        totalPaid: 0
+      });
+
+      // Feedback para o usuário
+      alert(`✅ Pagamento registrado com sucesso!\nCapital: ${formatCurrency(paymentData.capitalPaid)}\nJuros: ${formatCurrency(paymentData.interestPaid)}\nTotal: ${formatCurrency(paymentData.totalPaid)}`);
+    } catch (error) {
+      console.error('❌ Erro ao salvar pagamento:', error);
+      alert('Erro ao salvar pagamento. Verifique o console.');
+    }
   };
 
   const handleBulkPayment = () => {

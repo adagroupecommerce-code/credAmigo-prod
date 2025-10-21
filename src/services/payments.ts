@@ -119,3 +119,45 @@ export async function markPaymentAsPaid(paymentId: string, payload: {
   if (error) throw error;
   return data;
 }
+
+/**
+ * Mark installment as paid (alias for consistency)
+ */
+export async function markInstallmentPaid(paymentId: string, payload: {
+  payment_date: string;
+  total: number;
+  principal_amount: number;
+  interest_amount: number;
+  penalty?: number;
+}) {
+  const { data, error } = await supabase
+    .from('payments')
+    .update({
+      status: 'paid',
+      payment_date: payload.payment_date,
+      amount: payload.total,
+      principal_amount: payload.principal_amount,
+      interest_amount: payload.interest_amount,
+      penalty: payload.penalty ?? 0
+    })
+    .eq('id', paymentId)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Get payments by loan ID (for re-fetching)
+ */
+export async function getPaymentsByLoan(loanId: string) {
+  const { data, error } = await supabase
+    .from('payments')
+    .select('*')
+    .eq('loan_id', loanId)
+    .order('installment_number', { ascending: true });
+
+  if (error) throw error;
+  return data ?? [];
+}

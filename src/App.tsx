@@ -24,7 +24,7 @@ import { initializeRBACUsers } from './data/rbacUsers';
 import { calculateClientMetrics, updateClientMetricsInDatabase } from './utils/paymentUtils';
 import { useClients } from './hooks/useClients';
 import { useLoans } from './hooks/useLoans';
-import { markPaymentAsPaid } from './services/payments';
+import { markInstallmentPaid } from './services/payments';
 
 function App() {
   const auth = useAuthProvider();
@@ -478,12 +478,12 @@ function App() {
               onUpdatePayment={async (paymentId, status, paymentDate) => {
                 try {
                   // ✅ Persistir pagamento no Supabase
-                  await markPaymentAsPaid(paymentId, {
+                  await markInstallmentPaid(paymentId, {
                     payment_date: paymentDate || new Date().toISOString(),
-                    amount: selectedPayment.amount,
-                    principal_amount: selectedPayment.principalAmount,
-                    interest_amount: selectedPayment.interestAmount,
-                    penalty: selectedPayment.penalty || 0
+                    total: Number(selectedPayment.amount),
+                    principal_amount: Number(selectedPayment.principalAmount || 0),
+                    interest_amount: Number(selectedPayment.interestAmount || 0),
+                    penalty: Number(selectedPayment.penalty || 0)
                   });
 
                   console.log('✅ Pagamento salvo no Supabase!');
