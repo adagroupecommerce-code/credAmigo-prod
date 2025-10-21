@@ -1,5 +1,19 @@
 import { supabase } from '@/lib/supabase';
 
+export type PaymentRow = {
+  id: string;
+  loan_id: string;
+  installment_number: number;
+  status: 'pending' | 'paid' | 'overdue';
+  amount: number | null;
+  principal_amount: number | null;
+  interest_amount: number | null;
+  penalty: number | null;
+  due_date: string | null;
+  payment_date: string | null;
+  created_at: string;
+};
+
 export async function listPaymentsByLoan(loanId: string) {
   const { data, error } = await supabase
     .from('payments')
@@ -121,7 +135,7 @@ export async function markPaymentAsPaid(paymentId: string, payload: {
 }
 
 /**
- * Mark installment as paid (alias for consistency)
+ * Mark installment as paid (with proper number conversion)
  */
 export async function markInstallmentPaid(paymentId: string, payload: {
   payment_date: string;
@@ -135,17 +149,17 @@ export async function markInstallmentPaid(paymentId: string, payload: {
     .update({
       status: 'paid',
       payment_date: payload.payment_date,
-      amount: payload.total,
-      principal_amount: payload.principal_amount,
-      interest_amount: payload.interest_amount,
-      penalty: payload.penalty ?? 0
+      amount: Number(payload.total),
+      principal_amount: Number(payload.principal_amount),
+      interest_amount: Number(payload.interest_amount),
+      penalty: Number(payload.penalty ?? 0)
     })
     .eq('id', paymentId)
-    .select('*')
+    .select()
     .single();
 
   if (error) throw error;
-  return data;
+  return data as PaymentRow;
 }
 
 /**
@@ -154,10 +168,23 @@ export async function markInstallmentPaid(paymentId: string, payload: {
 export async function getPaymentsByLoan(loanId: string) {
   const { data, error } = await supabase
     .from('payments')
-    .select('*')
+    .select('id, loan_id, installment_number, status, amount, principal_amount, interest_amount, penalty, due_date, payment_date, created_at')
     .eq('loan_id', loanId)
     .order('installment_number', { ascending: true });
 
   if (error) throw error;
-  return data ?? [];
+  return data as PaymentRow[];
+}
+
+/**
+ * Sync payments from loan (optional: if RPC exists)
+ */
+export async function syncPaymentsFromLoan(loanId: string) {
+  try {
+    const { error } = await supabase.rpc('sync_payments_from_loan', { loan_id: loanId });
+    if (error) throw error;
+  } catch (error) {
+    // RPC may not exist, ignore
+    console.warn('sync_payments_from_loan RPC not available:', error);
+  }
 }

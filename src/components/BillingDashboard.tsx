@@ -3,7 +3,7 @@ import { Calendar, DollarSign, AlertTriangle, CheckCircle, Clock, Filter, Search
 import { Loan, Payment, Client } from '../types';
 import { useLoans } from '../hooks/useLoans';
 import { useClients } from '../hooks/useClients';
-import { getAllPayments } from '../services/payments';
+import { getAllPayments, getPaymentsByLoan, PaymentRow } from '../services/payments';
 import { useRBAC } from '../hooks/useRBAC';
 import { RBAC_RESOURCES, RBAC_ACTIONS } from '../types/rbac';
 import RBACButton from './RBACButton';
@@ -38,46 +38,45 @@ const BillingDashboard: React.FC<BillingDashboardProps> = ({ onViewPayment, onDe
 
   // Fetch payments from Supabase (FONTE DE VERDADE)
   const fetchPayments = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const data = await getAllPayments();
+      const rows = await getAllPayments();
 
       // Se não houver pagamentos, sincronizar empréstimos existentes
-      if (!data || data.length === 0) {
+      if (!rows || rows.length === 0) {
         console.log('⚠️ Nenhum pagamento encontrado. Sincronizando empréstimos...');
         const { syncAllLoansPayments } = await import('../services/loans');
         await syncAllLoansPayments();
 
         // Buscar novamente
-        const newData = await getAllPayments();
+        const newRows = await getAllPayments();
 
-        if (newData && newData.length > 0) {
-          const transformedPayments: Payment[] = newData.map((p: any) => ({
-            id: p.id,
-            loanId: p.loan_id,
-            installmentNumber: p.installment_number,
-            amount: p.amount,
-            principalAmount: p.principal_amount || 0,
-            interestAmount: p.interest_amount || 0,
-            penalty: p.penalty || 0,
-            dueDate: p.due_date,
-            paymentDate: p.payment_date,
-            status: p.status,
-            clientName: p.loans?.clients?.name || 'Cliente Desconhecido',
-            loanAmount: p.loans?.amount || 0
-          }));
-          setPayments(transformedPayments);
-          console.log('✅ Payments sincronizados:', transformedPayments.length);
-          return;
-        }
+        const transformedPayments: Payment[] = newRows.map((p: any) => ({
+          id: p.id,
+          loanId: p.loan_id,
+          installmentNumber: p.installment_number,
+          amount: p.amount || 0,
+          principalAmount: p.principal_amount || 0,
+          interestAmount: p.interest_amount || 0,
+          penalty: p.penalty || 0,
+          dueDate: p.due_date,
+          paymentDate: p.payment_date,
+          status: p.status,
+          clientName: p.loans?.clients?.name || 'Cliente Desconhecido',
+          loanAmount: p.loans?.amount || 0
+        }));
+
+        setPayments(transformedPayments);
+        console.log('✅ Payments sincronizados:', transformedPayments.length);
+        return;
       }
 
       // Transformar para formato Payment
-      const transformedPayments: Payment[] = data.map((p: any) => ({
+      const transformedPayments: Payment[] = rows.map((p: any) => ({
         id: p.id,
         loanId: p.loan_id,
         installmentNumber: p.installment_number,
-        amount: p.amount,
+        amount: p.amount || 0,
         principalAmount: p.principal_amount || 0,
         interestAmount: p.interest_amount || 0,
         penalty: p.penalty || 0,
@@ -94,6 +93,37 @@ const BillingDashboard: React.FC<BillingDashboardProps> = ({ onViewPayment, onDe
       console.error('❌ Error loading payments:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Re-fetch specific loan payments (called after payment update)
+  const refetchPaymentsByLoan = async (loanId: string) => {
+    try {
+      const rows = await getPaymentsByLoan(loanId);
+
+      // Update only payments from this loan
+      setPayments(prev => {
+        const others = prev.filter(p => p.loanId !== loanId);
+        const updated: Payment[] = rows.map((p: PaymentRow) => ({
+          id: p.id,
+          loanId: p.loan_id,
+          installmentNumber: p.installment_number,
+          amount: p.amount || 0,
+          principalAmount: p.principal_amount || 0,
+          interestAmount: p.interest_amount || 0,
+          penalty: p.penalty || 0,
+          dueDate: p.due_date || '',
+          paymentDate: p.payment_date,
+          status: p.status,
+          clientName: '',
+          loanAmount: 0
+        }));
+        return [...others, ...updated];
+      });
+
+      console.log(`✅ Payments for loan ${loanId} re-fetched`);
+    } catch (error) {
+      console.error('❌ Error re-fetching loan payments:', error);
     }
   };
 
@@ -225,8 +255,7 @@ const BillingDashboard: React.FC<BillingDashboardProps> = ({ onViewPayment, onDe
     if (!showPaymentModal) return;
 
     try {
-      // Importar função de persistência
-      const { markInstallmentPaid } = await import('../services/payments');
+      const { markInstallmentPaid, syncPaymentsFromLoan } = await import('../services/payments');
 
       // Salvar pagamento no Supabase
       await markInstallmentPaid(showPaymentModal.id, {
@@ -239,8 +268,11 @@ const BillingDashboard: React.FC<BillingDashboardProps> = ({ onViewPayment, onDe
 
       console.log('✅ Pagamento salvo no Supabase!');
 
-      // Recarregar payments do banco
-      await fetchPayments();
+      // Opcional: sincronizar installment_plan
+      await syncPaymentsFromLoan(showPaymentModal.loanId).catch(() => {});
+
+      // Re-fetch payments do banco (FONTE DE VERDADE)
+      await refetchPaymentsByLoan(showPaymentModal.loanId);
 
       // Fechar modal e limpar dados
       setShowPaymentModal(null);

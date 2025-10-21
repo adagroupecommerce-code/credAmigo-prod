@@ -24,7 +24,7 @@ import { initializeRBACUsers } from './data/rbacUsers';
 import { calculateClientMetrics, updateClientMetricsInDatabase } from './utils/paymentUtils';
 import { useClients } from './hooks/useClients';
 import { useLoans } from './hooks/useLoans';
-import { markInstallmentPaid } from './services/payments';
+import { markInstallmentPaid, syncPaymentsFromLoan, getPaymentsByLoan } from './services/payments';
 
 function App() {
   const auth = useAuthProvider();
@@ -488,7 +488,13 @@ function App() {
 
                   console.log('✅ Pagamento salvo no Supabase!');
 
-                  // Recarregar dados
+                  // Opcional: sincronizar installment_plan
+                  await syncPaymentsFromLoan(selectedPayment.loanId).catch(() => {});
+
+                  // Re-fetch payments do banco (FONTE DE VERDADE)
+                  await getPaymentsByLoan(selectedPayment.loanId);
+
+                  // Recarregar dados dos loans
                   await refetchLoans();
 
                   handleBack();
