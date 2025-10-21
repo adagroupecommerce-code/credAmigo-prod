@@ -191,14 +191,6 @@ useEffect(() => {
     }
   };
 
-  const handlePaymentUpdate = (paymentId: string, status: Payment['status'], paymentDate?: string) => {
-    setPayments(prev => prev.map(payment => 
-      payment.id === paymentId 
-        ? { ...payment, status, paymentDate: paymentDate || new Date().toISOString().split('T')[0] }
-        : payment
-    ));
-  };
-
   const handleOpenPaymentModal = (payment: Payment) => {
     setShowPaymentModal(payment);
     // Pré-preencher com valores estimados baseados na parcela
