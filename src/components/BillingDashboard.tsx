@@ -581,14 +581,14 @@ const handleQuickPay = async (payment: Payment) => {
                               Baixar
                             </RBACButton>
                             <RBACButton
-                              resource={RBAC_RESOURCES.COLLECTIONS}
-                              action={RBAC_ACTIONS.UPDATE}
-                              onClick={() => handlePaymentUpdate(payment.id, 'paid')}
-                              className="px-2 py-1 bg-blue-600 text-white rounded text-xs sm:text-sm hover:bg-blue-700 transition-colors touch-manipulation text-center"
-                              title="Baixa rápida"
-                            >
-                              Rápida
-                            </RBACButton>
+  resource={RBAC_RESOURCES.COLLECTIONS}
+  action={RBAC_ACTIONS.UPDATE}
+  onClick={() => handleQuickPay(payment)}   // <<<<<<<<<<<<<< troquei aqui
+  className="px-2 py-1 bg-blue-600 text-white rounded text-xs sm:text-sm hover:bg-blue-700 transition-colors touch-manipulation text-center"
+  title="Baixa rápida"
+>
+  Rápida
+</RBACButton>
                             <RBACButton
                               resource={RBAC_RESOURCES.COLLECTIONS}
                               action={RBAC_ACTIONS.DELETE}
