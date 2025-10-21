@@ -164,41 +164,60 @@ const CRMKanban: React.FC<CRMKanbanProps> = ({ onConvertToClient }) => {
 
   const filteredProspects = filterProspectsByDate(prospects);
 
-  const handleCreateProspect = () => {
+  const handleCreateProspect = async () => {
     if (!newProspect.name || !newProspect.phone) {
       alert('Por favor, preencha os campos obrigatórios');
       return;
     }
 
-    const prospect: Prospect = {
-      ...newProspect,
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      documents: {},
-      stage: 'lead'
-    } as Prospect;
+    try {
+      // Salvar no Supabase
+      await createProspect({
+        name: newProspect.name,
+        phone: newProspect.phone,
+        email: newProspect.email || null,
+        cpf: newProspect.cpf || null,
+        requestedAmount: newProspect.requestedAmount || 0,
+        stage: 'lead',
+        priority: newProspect.priority || 'medium',
+        source: newProspect.source || 'website',
+        notes: newProspect.notes || '',
+        documents: {},
+        documentFiles: {}
+      });
 
-    setProspects([...prospects, prospect]);
-    setNewProspect({
-      name: '',
-      phone: '',
-      email: '',
-      requestedAmount: 0,
-      priority: 'medium',
-      source: 'website',
-      notes: '',
-      stage: 'lead'
-    });
-    setShowNewProspectForm(false);
+      // Limpar formulário
+      setNewProspect({
+        name: '',
+        phone: '',
+        email: '',
+        requestedAmount: 0,
+        priority: 'medium',
+        source: 'website',
+        notes: '',
+        stage: 'lead'
+      });
+      setShowNewProspectForm(false);
+
+      console.log('✅ Prospect criado e salvo no Supabase!');
+    } catch (error) {
+      console.error('❌ Erro ao criar prospect:', error);
+      alert('Erro ao salvar prospect. Verifique o console.');
+    }
   };
 
-  const handleMoveProspect = (prospectId: string, newStage: Prospect['stage']) => {
-    setProspects(prospects.map(p => 
-      p.id === prospectId 
-        ? { ...p, stage: newStage, updatedAt: new Date().toISOString() }
-        : p
-    ));
+  const handleMoveProspect = async (prospectId: string, newStage: Prospect['stage']) => {
+    try {
+      // Atualizar no Supabase
+      await updateProspect(prospectId, {
+        stage: newStage
+      });
+
+      console.log(`✅ Prospect ${prospectId} movido para ${newStage}`);
+    } catch (error) {
+      console.error('❌ Erro ao mover prospect:', error);
+      alert('Erro ao mover prospect.');
+    }
   };
 
   // Funções de Drag and Drop
@@ -242,89 +261,118 @@ const CRMKanban: React.FC<CRMKanbanProps> = ({ onConvertToClient }) => {
     }
     setDraggedProspect(null);
   };
-  const handleConvertToClient = (prospect: Prospect) => {
-    // Criar objeto prospect com documentos para conversão
-    const prospectWithDocs = {
-      ...prospect,
-      documentFiles: prospect.documentFiles || {}
-    };
-    onConvertToClient(prospectWithDocs);
-    // Remove o prospect da lista após conversão
-    setProspects(prospects.filter(p => p.id !== prospect.id));
-  };
+  const handleConvertToClient = async (prospect: Prospect) => {
+    try {
+      // Criar objeto prospect com documentos para conversão
+      const prospectWithDocs = {
+        ...prospect,
+        documentFiles: prospect.documentFiles || {}
+      };
+      onConvertToClient(prospectWithDocs);
 
-  const handleArchiveProspect = (prospectId: string) => {
-    if (confirm('Tem certeza que deseja arquivar este prospect?')) {
-      setProspects(prospects.map(p => 
-        p.id === prospectId 
-          ? { 
-              ...p, 
-              isArchived: true, 
-              archivedAt: new Date().toISOString(),
-              archivedBy: 'Usuário Atual' // Em produção, usar dados do usuário logado
-            }
-          : p
-      ));
+      // Arquivar o prospect após conversão
+      await updateProspect(prospect.id, {
+        isArchived: true,
+        archivedAt: new Date().toISOString(),
+        archivedBy: 'Sistema - Convertido em Cliente'
+      });
+
+      console.log('✅ Prospect convertido e arquivado com sucesso!');
+    } catch (error) {
+      console.error('❌ Erro ao converter prospect:', error);
     }
   };
 
-  const handleUnarchiveProspect = (prospectId: string) => {
-    setProspects(prospects.map(p => 
-      p.id === prospectId 
-        ? { 
-            ...p, 
-            isArchived: false, 
-            archivedAt: undefined,
-            archivedBy: undefined
-          }
-        : p
-    ));
+  const handleArchiveProspect = async (prospectId: string) => {
+    if (confirm('Tem certeza que deseja arquivar este prospect?')) {
+      try {
+        await updateProspect(prospectId, {
+          isArchived: true,
+          archivedAt: new Date().toISOString(),
+          archivedBy: 'Usuário Atual'
+        });
+        console.log('✅ Prospect arquivado com sucesso!');
+      } catch (error) {
+        console.error('❌ Erro ao arquivar prospect:', error);
+        alert('Erro ao arquivar prospect.');
+      }
+    }
   };
 
-  const handleDocumentUpload = (documentType: string, file: File) => {
+  const handleUnarchiveProspect = async (prospectId: string) => {
+    try {
+      await updateProspect(prospectId, {
+        isArchived: false,
+        archivedAt: null,
+        archivedBy: null
+      });
+      console.log('✅ Prospect desarquivado com sucesso!');
+    } catch (error) {
+      console.error('❌ Erro ao desarquivar prospect:', error);
+      alert('Erro ao desarquivar prospect.');
+    }
+  };
+
+  const handleDocumentUpload = async (documentType: string, file: File) => {
     if (!uploadingProspect) return;
 
-    const updatedProspect = {
-      ...uploadingProspect,
-      documents: {
+    try {
+      const newDocs = {
         ...uploadingProspect.documents,
         [documentType]: true
-      },
-      documentFiles: {
+      };
+      const newFiles = {
         ...uploadingProspect.documentFiles,
         [documentType]: file
-      },
-      updatedAt: new Date().toISOString()
-    };
+      };
 
-    setProspects(prospects.map(p => 
-      p.id === uploadingProspect.id ? updatedProspect : p
-    ));
+      await updateProspect(uploadingProspect.id, {
+        documents: newDocs,
+        documentFiles: newFiles
+      });
 
-    setUploadingProspect(updatedProspect);
+      setUploadingProspect({
+        ...uploadingProspect,
+        documents: newDocs,
+        documentFiles: newFiles
+      });
+
+      console.log('✅ Documento enviado com sucesso!');
+    } catch (error) {
+      console.error('❌ Erro ao enviar documento:', error);
+      alert('Erro ao enviar documento.');
+    }
   };
 
-  const handleRemoveDocument = (documentType: string) => {
+  const handleRemoveDocument = async (documentType: string) => {
     if (!uploadingProspect) return;
 
-    const updatedProspect = {
-      ...uploadingProspect,
-      documents: {
+    try {
+      const newDocs = {
         ...uploadingProspect.documents,
         [documentType]: false
-      },
-      documentFiles: {
+      };
+      const newFiles = {
         ...uploadingProspect.documentFiles,
         [documentType]: undefined
-      },
-      updatedAt: new Date().toISOString()
-    };
+      };
 
-    setProspects(prospects.map(p => 
-      p.id === uploadingProspect.id ? updatedProspect : p
-    ));
+      await updateProspect(uploadingProspect.id, {
+        documents: newDocs,
+        documentFiles: newFiles
+      });
 
-    setUploadingProspect(updatedProspect);
+      setUploadingProspect({
+        ...uploadingProspect,
+        documents: newDocs,
+        documentFiles: newFiles
+      });
+
+      console.log('✅ Documento removido com sucesso!');
+    } catch (error) {
+      console.error('❌ Erro ao remover documento:', error);
+      alert('Erro ao remover documento.');
+    }
   };
 
   const getDocumentProgress = (documents: Prospect['documents']) => {
