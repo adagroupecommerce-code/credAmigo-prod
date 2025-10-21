@@ -43,11 +43,7 @@ export async function getAllPayments() {
     .from('payments')
     .select(`
       id, loan_id, installment_number, status, amount, principal_amount, interest_amount, penalty,
-      due_date, payment_date, created_at,
-      loans (
-        id, client_id, amount,
-        clients ( id, name )
-      )
+      due_date, payment_date, created_at
     `)
     .order('due_date', { ascending: true });
 
