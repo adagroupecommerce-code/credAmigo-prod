@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { upsertPayment } from './payments';
+import { upsertPayment, createPaymentsForLoan } from './payments';
 
 export async function listLoans() {
   const { data, error } = await supabase
@@ -60,29 +60,19 @@ export async function createLoan(payload: {
 
   if (error) throw error;
 
-  // 2. Criar parcelas na tabela payments
-  if (data && payload.installment_plan && Array.isArray(payload.installment_plan)) {
+  // 2. Criar parcelas automaticamente usando o gerador SAC
+  if (data) {
     try {
-      for (const installment of payload.installment_plan) {
-        await upsertPayment({
-          loan_id: data.id,
-          installment_number: installment.installmentNumber,
-          amount: installment.totalAmount,
-          principal_amount: installment.principalAmount || null,
-          interest_amount: installment.interestAmount || null,
-          penalty: 0,
-          due_date: installment.dueDate,
-          payment_date: installment.paymentDate || null,
-          status: installment.status || 'pending',
-          original_amount: installment.totalAmount,
-          payment_type: 'full',
-          excess_amount: 0,
-          notes: null
-        });
-      }
-      console.log(`✅ ${payload.installment_plan.length} parcelas criadas no Supabase`);
+      await createPaymentsForLoan({
+        id: data.id,
+        amount: payload.amount,
+        interestRate: payload.interest_rate,
+        installments: payload.installments,
+        startDate: payload.start_date
+      });
     } catch (paymentError) {
-      console.error('❌ Erro ao criar parcelas:', paymentError);
+      console.error('❌ Erro ao criar parcelas automaticamente:', paymentError);
+      // Não falha a criação do empréstimo se as parcelas falharem
     }
   }
 

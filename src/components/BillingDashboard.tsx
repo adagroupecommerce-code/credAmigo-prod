@@ -3,7 +3,7 @@ import { Calendar, DollarSign, AlertTriangle, CheckCircle, Clock, Filter, Search
 import { Loan, Payment, Client } from '../types';
 import { useLoans } from '../hooks/useLoans';
 import { useClients } from '../hooks/useClients';
-import { getAllPayments, getPaymentsByLoan } from '../services/payments';
+import { getAllPayments, getPaymentsByLoan, syncAllLoansPayments } from '../services/payments';
 import { useRBAC } from '../hooks/useRBAC';
 import { RBAC_RESOURCES, RBAC_ACTIONS } from '../types/rbac';
 import RBACButton from './RBACButton';
@@ -41,10 +41,38 @@ const BillingDashboard: React.FC<BillingDashboardProps> = ({ onViewPayment, onDe
     setLoading(true);
     try {
       const rows = await getAllPayments();
-      setPayments(rows); // ✅ já vem no formato correto
-      console.log('✅ Payments loaded from Supabase:', rows.length);
+
+      // Se não houver parcelas, sincronizar automaticamente
+      if (!rows || rows.length === 0) {
+        console.log('⚠️ Nenhuma parcela encontrada. Sincronizando empréstimos...');
+        await syncAllLoansPayments();
+
+        // Buscar novamente
+        const newRows = await getAllPayments();
+        setPayments(newRows);
+        console.log('✅ Sincronização concluída:', newRows.length, 'parcelas');
+      } else {
+        setPayments(rows);
+        console.log('✅ Payments loaded from Supabase:', rows.length);
+      }
     } catch (e) {
       console.error('Erro ao carregar pagamentos:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Sincronizar manualmente (botão)
+  const handleSync = async () => {
+    setLoading(true);
+    try {
+      console.log('🔄 Sincronizando parcelas...');
+      await syncAllLoansPayments();
+      await fetchPayments();
+      alert('✅ Sincronização concluída com sucesso!');
+    } catch (e) {
+      console.error('Erro na sincronização:', e);
+      alert('❌ Erro ao sincronizar parcelas');
     } finally {
       setLoading(false);
     }
@@ -372,6 +400,14 @@ const handleQuickPay = async (payment: Payment) => {
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Painel de Cobrança</h1>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
+          <button
+            onClick={handleSync}
+            disabled={loading}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+          >
+            <CreditCard size={20} className="mr-2" />
+            {loading ? 'Sincronizando...' : 'Sincronizar'}
+          </button>
           <button className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
             <Download size={20} className="mr-2" />
             Exportar

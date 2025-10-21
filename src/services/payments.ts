@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { generateInstallments, InstallmentData } from '@/utils/installmentGenerator';
 
 export type PaymentRow = {
   id: string;
@@ -43,7 +44,11 @@ export async function getAllPayments() {
     .from('payments')
     .select(`
       id, loan_id, installment_number, status, amount, principal_amount, interest_amount, penalty,
-      due_date, payment_date, created_at
+      due_date, payment_date, created_at,
+      loans (
+        id, client_id, amount,
+        clients ( id, name )
+      )
     `)
     .order('due_date', { ascending: true });
 
@@ -102,4 +107,88 @@ export async function markInstallmentPaid(
 export async function syncPaymentsFromLoan(loanId: string) {
   const { error } = await supabase.rpc('sync_payments_from_loan', { loan_id: loanId });
   if (error) throw error;
+}
+
+/**
+ * Cria parcelas para um empréstimo (insere em lote no banco)
+ */
+export async function createPaymentsForLoan(loanData: {
+  id: string;
+  amount: number;
+  interestRate: number;
+  installments: number;
+  startDate: string;
+}) {
+  // Gera as parcelas usando SAC
+  const installments = generateInstallments(loanData);
+
+  // Insere todas as parcelas no banco de uma vez
+  const { data, error } = await supabase
+    .from('payments')
+    .insert(installments)
+    .select('id');
+
+  if (error) {
+    console.error('Erro ao criar parcelas:', error);
+    throw error;
+  }
+
+  console.log(`✅ ${installments.length} parcelas criadas para o empréstimo ${loanData.id}`);
+  return data;
+}
+
+/**
+ * Sincroniza parcelas de todos os empréstimos que não têm parcelas
+ */
+export async function syncAllLoansPayments() {
+  try {
+    // Busca todos os empréstimos
+    const { data: loans, error: loansError } = await supabase
+      .from('loans')
+      .select('id, amount, interest_rate, installments, start_date');
+
+    if (loansError) throw loansError;
+
+    if (!loans || loans.length === 0) {
+      console.log('⚠️ Nenhum empréstimo encontrado');
+      return;
+    }
+
+    console.log(`📋 Encontrados ${loans.length} empréstimos`);
+
+    // Para cada empréstimo, verifica se já tem parcelas
+    for (const loan of loans) {
+      const { data: existingPayments, error: paymentsError } = await supabase
+        .from('payments')
+        .select('id')
+        .eq('loan_id', loan.id)
+        .limit(1);
+
+      if (paymentsError) {
+        console.error(`Erro ao verificar parcelas do empréstimo ${loan.id}:`, paymentsError);
+        continue;
+      }
+
+      // Se já tem parcelas, pula
+      if (existingPayments && existingPayments.length > 0) {
+        console.log(`⏭️ Empréstimo ${loan.id} já possui parcelas`);
+        continue;
+      }
+
+      // Cria as parcelas
+      console.log(`📦 Gerando parcelas para empréstimo ${loan.id}...`);
+      await createPaymentsForLoan({
+        id: loan.id,
+        amount: Number(loan.amount),
+        interestRate: Number(loan.interest_rate),
+        installments: loan.installments,
+        startDate: loan.start_date
+      });
+    }
+
+    console.log('✅ Sincronização de parcelas concluída!');
+  } catch (error) {
+    console.error('❌ Erro na sincronização de parcelas:', error);
+    throw error;
+  }
 }
