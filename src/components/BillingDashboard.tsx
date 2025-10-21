@@ -68,59 +68,84 @@ const BillingDashboard: React.FC<BillingDashboardProps> = ({ onViewPayment, onDe
     fetchPayments();
   }, []);
 
-  useEffect(() => {
-    let filtered = payments;
+useEffect(() => {
+  // 1) índices rápidos pra não ficar dando find a cada item
+  const loanById = new Map(loans.map(l => [l.id, l]));
+  const clientById = new Map(clients.map(c => [c.id, c]));
 
-    // Filtro por status
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(payment => payment.status === statusFilter);
-    }
+  let filtered = [...payments];
 
-    // Filtro por data
-    if (dateFilter !== 'all') {
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      
-      filtered = filtered.filter(payment => {
-        const dueDate = new Date(payment.dueDate);
-        
-        switch (dateFilter) {
-          case 'today':
-            return dueDate.toDateString() === today.toDateString();
-          case 'week':
-            const weekFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
-            return dueDate >= today && dueDate <= weekFromNow;
-          case 'month':
-            const monthFromNow = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
-            return dueDate >= today && dueDate <= monthFromNow;
-          case 'custom':
-            if (customDateRange.start && customDateRange.end) {
-              const startDate = new Date(customDateRange.start);
-              const endDate = new Date(customDateRange.end);
-              return dueDate >= startDate && dueDate <= endDate;
-            }
-            return true;
-          default:
-            return true;
+  // 2) Filtro por status
+  if (statusFilter !== 'all') {
+    filtered = filtered.filter(p => p.status === statusFilter);
+  }
+
+  // 3) Filtro por data (usa dueDate da parcela)
+  if (dateFilter !== 'all') {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    filtered = filtered.filter(p => {
+      // cuidado com dueDate vazio
+      if (!p.dueDate) return false;
+      const due = new Date(p.dueDate);
+
+      switch (dateFilter) {
+        case 'today':
+          return due.toDateString() === today.toDateString();
+        case 'week': {
+          const weekTo = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+          return due >= today && due <= weekTo;
         }
-      });
-    }
+        case 'month': {
+          const monthTo = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+          return due >= today && due <= monthTo;
+        }
+        case 'custom': {
+          const { start, end } = customDateRange;
+          if (!start || !end) return true;
+          const startDate = new Date(start);
+          const endDate = new Date(end);
+          // normaliza fim do dia
+          endDate.setHours(23, 59, 59, 999);
+          return due >= startDate && due <= endDate;
+        }
+        default:
+          return true;
+      }
+    });
+  }
 
-    // Filtro por busca
-    if (searchTerm) {
-      filtered = filtered.filter(payment => {
-        const loan = loans.find(l => l.id === payment.loanId);
-        const client = clients.find(c => c.id === loan?.clientId);
-        return (
-          client?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          payment.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          loan?.id.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-      });
-    }
+  // 4) Filtro por busca (nome do cliente, id da parcela, id do empréstimo)
+  if (searchTerm.trim()) {
+    const q = searchTerm.trim().toLowerCase();
 
-    setFilteredPayments(filtered);
-  }, [payments, statusFilter, dateFilter, customDateRange, searchTerm]);
+    filtered = filtered.filter(p => {
+      const loan = loanById.get(p.loanId);
+      const client = loan ? clientById.get(loan.clientId) : undefined;
+
+      const byClientName = (client?.name?.toLowerCase() || '').includes(q);
+      const byPaymentId = p.id.toLowerCase().includes(q);
+      const byLoanId = (loan?.id || '').toLowerCase().includes(q);
+
+      return byClientName || byPaymentId || byLoanId;
+    });
+  }
+
+  setFilteredPayments(filtered);
+
+// 🔑 dependências: sempre que QUALQUER uma delas mudar, recalcule
+}, [
+  payments,
+  statusFilter,
+  dateFilter,
+  customDateRange.start,
+  customDateRange.end,
+  searchTerm,
+  loans,
+  clients,
+]);
+
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
