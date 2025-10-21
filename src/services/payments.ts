@@ -12,138 +12,75 @@ export type PaymentRow = {
   due_date: string | null;
   payment_date: string | null;
   created_at: string;
+  loans?: {
+    id: string;
+    client_id: string;
+    amount: number | null;
+    clients?: { id: string; name: string | null } | null;
+  } | null;
 };
 
-export async function listPaymentsByLoan(loanId: string) {
+function mapToPayment(p: PaymentRow) {
+  return {
+    id: p.id,
+    loanId: p.loan_id,
+    installmentNumber: p.installment_number,
+    amount: Number(p.amount ?? 0),
+    principalAmount: Number(p.principal_amount ?? 0),
+    interestAmount: Number(p.interest_amount ?? 0),
+    penalty: Number(p.penalty ?? 0),
+    dueDate: p.due_date ?? '',
+    paymentDate: p.payment_date ?? null,
+    status: p.status,
+    clientName: p.loans?.clients?.name ?? 'Cliente Desconhecido',
+    loanAmount: Number(p.loans?.amount ?? 0),
+  };
+}
+
+/** Busca todas as parcelas com os relacionamentos reais no Supabase */
+export async function getAllPayments() {
   const { data, error } = await supabase
     .from('payments')
-    .select('*')
+    .select(`
+      id, loan_id, installment_number, status, amount, principal_amount, interest_amount, penalty,
+      due_date, payment_date, created_at,
+      loans (
+        id, client_id, amount,
+        clients ( id, name )
+      )
+    `)
+    .order('due_date', { ascending: true });
+
+  if (error) throw error;
+  return (data as PaymentRow[]).map(mapToPayment);
+}
+
+/** Busca apenas as parcelas de um empréstimo específico */
+export async function getPaymentsByLoan(loanId: string) {
+  const { data, error } = await supabase
+    .from('payments')
+    .select(`
+      id, loan_id, installment_number, status, amount, principal_amount, interest_amount, penalty,
+      due_date, payment_date, created_at
+    `)
     .eq('loan_id', loanId)
     .order('installment_number', { ascending: true });
 
   if (error) throw error;
-  return data ?? [];
+  return (data as PaymentRow[]).map(mapToPayment);
 }
 
-export async function getAllPayments() {
-  const { data, error } = await supabase
-    .from('payments')
-    .select('*, loans(*, clients(name))')
-    .order('due_date', { ascending: true });
-
-  if (error) throw error;
-  return data ?? [];
-}
-
-export async function upsertPayment(payload: {
-  id?: string;
-  loan_id: string;
-  installment_number: number;
-  amount: number;
-  principal_amount?: number | null;
-  interest_amount?: number | null;
-  penalty?: number;
-  due_date: string;
-  payment_date?: string | null;
-  status?: string;
-  original_amount?: number;
-  payment_type?: string;
-  excess_amount?: number;
-  notes?: string | null;
-}) {
-  const { data, error } = await supabase
-    .from('payments')
-    .upsert({
-      id: payload.id,
-      loan_id: payload.loan_id,
-      installment_number: payload.installment_number,
-      amount: payload.amount,
-      principal_amount: payload.principal_amount ?? null,
-      interest_amount: payload.interest_amount ?? null,
-      penalty: payload.penalty ?? 0,
-      due_date: payload.due_date,
-      payment_date: payload.payment_date ?? null,
-      status: payload.status ?? 'pending',
-      original_amount: payload.original_amount ?? 0,
-      payment_type: payload.payment_type ?? 'full',
-      excess_amount: payload.excess_amount ?? 0,
-      notes: payload.notes ?? null,
-    })
-    .select('id')
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-export async function updatePayment(id: string, patch: Partial<{
-  amount: number;
-  principal_amount: number | null;
-  interest_amount: number | null;
-  penalty: number;
-  due_date: string;
-  payment_date: string | null;
-  status: string;
-  original_amount: number;
-  payment_type: string;
-  excess_amount: number;
-  notes: string | null;
-}>) {
-  const { data, error } = await supabase
-    .from('payments')
-    .update(patch)
-    .eq('id', id)
-    .select('id')
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-export async function deletePayment(id: string) {
-  const { error } = await supabase.from('payments').delete().eq('id', id);
-  if (error) throw error;
-}
-
-/**
- * Mark a payment as paid
- * Updates status, payment_date and amounts
- */
-export async function markPaymentAsPaid(paymentId: string, payload: {
-  payment_date: string;
-  principal_amount?: number;
-  interest_amount?: number;
-  penalty?: number;
-  amount: number;
-}) {
-  const { data, error } = await supabase
-    .from('payments')
-    .update({
-      status: 'paid',
-      payment_date: payload.payment_date,
-      principal_amount: payload.principal_amount ?? null,
-      interest_amount: payload.interest_amount ?? null,
-      penalty: payload.penalty ?? 0,
-      amount: payload.amount
-    })
-    .eq('id', paymentId)
-    .select('*')
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-/**
- * Mark installment as paid (with proper number conversion)
- */
-export async function markInstallmentPaid(paymentId: string, payload: {
-  payment_date: string;
-  total: number;
-  principal_amount: number;
-  interest_amount: number;
-  penalty?: number;
-}) {
+/** Marca uma parcela como paga e retorna os dados atualizados do banco */
+export async function markInstallmentPaid(
+  paymentId: string,
+  payload: {
+    payment_date: string;     // ISO (yyyy-mm-dd)
+    total: number;
+    principal_amount: number;
+    interest_amount: number;
+    penalty?: number;
+  }
+) {
   const { data, error } = await supabase
     .from('payments')
     .update({
@@ -152,39 +89,21 @@ export async function markInstallmentPaid(paymentId: string, payload: {
       amount: Number(payload.total),
       principal_amount: Number(payload.principal_amount),
       interest_amount: Number(payload.interest_amount),
-      penalty: Number(payload.penalty ?? 0)
+      penalty: Number(payload.penalty ?? 0),
     })
     .eq('id', paymentId)
-    .select()
+    .select(`
+      id, loan_id, installment_number, status, amount, principal_amount, interest_amount, penalty,
+      due_date, payment_date, created_at
+    `)
     .single();
 
   if (error) throw error;
-  return data as PaymentRow;
+  return mapToPayment(data as PaymentRow);
 }
 
-/**
- * Get payments by loan ID (for re-fetching)
- */
-export async function getPaymentsByLoan(loanId: string) {
-  const { data, error } = await supabase
-    .from('payments')
-    .select('id, loan_id, installment_number, status, amount, principal_amount, interest_amount, penalty, due_date, payment_date, created_at')
-    .eq('loan_id', loanId)
-    .order('installment_number', { ascending: true });
-
-  if (error) throw error;
-  return data as PaymentRow[];
-}
-
-/**
- * Sync payments from loan (optional: if RPC exists)
- */
+/** Opcional — se a RPC existir no banco */
 export async function syncPaymentsFromLoan(loanId: string) {
-  try {
-    const { error } = await supabase.rpc('sync_payments_from_loan', { loan_id: loanId });
-    if (error) throw error;
-  } catch (error) {
-    // RPC may not exist, ignore
-    console.warn('sync_payments_from_loan RPC not available:', error);
-  }
+  const { error } = await supabase.rpc('sync_payments_from_loan', { loan_id: loanId });
+  if (error) throw error;
 }

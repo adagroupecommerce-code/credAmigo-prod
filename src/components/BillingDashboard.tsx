@@ -3,7 +3,7 @@ import { Calendar, DollarSign, AlertTriangle, CheckCircle, Clock, Filter, Search
 import { Loan, Payment, Client } from '../types';
 import { useLoans } from '../hooks/useLoans';
 import { useClients } from '../hooks/useClients';
-import { getAllPayments, getPaymentsByLoan, PaymentRow } from '../services/payments';
+import { getAllPayments, getPaymentsByLoan } from '../services/payments';
 import { useRBAC } from '../hooks/useRBAC';
 import { RBAC_RESOURCES, RBAC_ACTIONS } from '../types/rbac';
 import RBACButton from './RBACButton';
@@ -41,56 +41,10 @@ const BillingDashboard: React.FC<BillingDashboardProps> = ({ onViewPayment, onDe
     setLoading(true);
     try {
       const rows = await getAllPayments();
-
-      // Se não houver pagamentos, sincronizar empréstimos existentes
-      if (!rows || rows.length === 0) {
-        console.log('⚠️ Nenhum pagamento encontrado. Sincronizando empréstimos...');
-        const { syncAllLoansPayments } = await import('../services/loans');
-        await syncAllLoansPayments();
-
-        // Buscar novamente
-        const newRows = await getAllPayments();
-
-        const transformedPayments: Payment[] = newRows.map((p: any) => ({
-          id: p.id,
-          loanId: p.loan_id,
-          installmentNumber: p.installment_number,
-          amount: p.amount || 0,
-          principalAmount: p.principal_amount || 0,
-          interestAmount: p.interest_amount || 0,
-          penalty: p.penalty || 0,
-          dueDate: p.due_date,
-          paymentDate: p.payment_date,
-          status: p.status,
-          clientName: p.loans?.clients?.name || 'Cliente Desconhecido',
-          loanAmount: p.loans?.amount || 0
-        }));
-
-        setPayments(transformedPayments);
-        console.log('✅ Payments sincronizados:', transformedPayments.length);
-        return;
-      }
-
-      // Transformar para formato Payment
-      const transformedPayments: Payment[] = rows.map((p: any) => ({
-        id: p.id,
-        loanId: p.loan_id,
-        installmentNumber: p.installment_number,
-        amount: p.amount || 0,
-        principalAmount: p.principal_amount || 0,
-        interestAmount: p.interest_amount || 0,
-        penalty: p.penalty || 0,
-        dueDate: p.due_date,
-        paymentDate: p.payment_date,
-        status: p.status,
-        clientName: p.loans?.clients?.name || 'Cliente Desconhecido',
-        loanAmount: p.loans?.amount || 0
-      }));
-
-      setPayments(transformedPayments);
-      console.log('✅ Payments loaded from Supabase:', transformedPayments.length);
-    } catch (error) {
-      console.error('❌ Error loading payments:', error);
+      setPayments(rows); // ✅ já vem no formato correto
+      console.log('✅ Payments loaded from Supabase:', rows.length);
+    } catch (e) {
+      console.error('Erro ao carregar pagamentos:', e);
     } finally {
       setLoading(false);
     }
@@ -100,30 +54,13 @@ const BillingDashboard: React.FC<BillingDashboardProps> = ({ onViewPayment, onDe
   const refetchPaymentsByLoan = async (loanId: string) => {
     try {
       const rows = await getPaymentsByLoan(loanId);
-
-      // Update only payments from this loan
       setPayments(prev => {
         const others = prev.filter(p => p.loanId !== loanId);
-        const updated: Payment[] = rows.map((p: PaymentRow) => ({
-          id: p.id,
-          loanId: p.loan_id,
-          installmentNumber: p.installment_number,
-          amount: p.amount || 0,
-          principalAmount: p.principal_amount || 0,
-          interestAmount: p.interest_amount || 0,
-          penalty: p.penalty || 0,
-          dueDate: p.due_date || '',
-          paymentDate: p.payment_date,
-          status: p.status,
-          clientName: '',
-          loanAmount: 0
-        }));
-        return [...others, ...updated];
+        return [...others, ...rows]; // ✅ substitui parcelas antigas pelas novas
       });
-
       console.log(`✅ Payments for loan ${loanId} re-fetched`);
-    } catch (error) {
-      console.error('❌ Error re-fetching loan payments:', error);
+    } catch (e) {
+      console.error('Erro ao atualizar parcelas do empréstimo:', e);
     }
   };
 
