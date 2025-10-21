@@ -24,6 +24,7 @@ import { initializeRBACUsers } from './data/rbacUsers';
 import { calculateClientMetrics, updateClientMetricsInDatabase } from './utils/paymentUtils';
 import { useClients } from './hooks/useClients';
 import { useLoans } from './hooks/useLoans';
+import { markPaymentAsPaid } from './services/payments';
 
 function App() {
   const auth = useAuthProvider();
@@ -471,13 +472,30 @@ function App() {
       case 'payment-details':
         return selectedPayment ? (
           <RBACProtectedRoute resource={RBAC_RESOURCES.COLLECTIONS} action={RBAC_ACTIONS.READ}>
-            <PaymentDetails 
-              payment={selectedPayment} 
+            <PaymentDetails
+              payment={selectedPayment}
               onBack={handleBack}
-              onUpdatePayment={(paymentId, status, paymentDate) => {
-                // Aqui você atualizaria o pagamento no estado global
-                console.log('Update payment:', paymentId, status, paymentDate);
-                handleBack();
+              onUpdatePayment={async (paymentId, status, paymentDate) => {
+                try {
+                  // ✅ Persistir pagamento no Supabase
+                  await markPaymentAsPaid(paymentId, {
+                    payment_date: paymentDate || new Date().toISOString(),
+                    amount: selectedPayment.amount,
+                    principal_amount: selectedPayment.principalAmount,
+                    interest_amount: selectedPayment.interestAmount,
+                    penalty: selectedPayment.penalty || 0
+                  });
+
+                  console.log('✅ Pagamento salvo no Supabase!');
+
+                  // Recarregar dados
+                  await refetchLoans();
+
+                  handleBack();
+                } catch (error) {
+                  console.error('❌ Erro ao salvar pagamento:', error);
+                  alert('Erro ao salvar pagamento. Verifique o console.');
+                }
               }}
             />
           </RBACProtectedRoute>
