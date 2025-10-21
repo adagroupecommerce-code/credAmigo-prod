@@ -187,6 +187,31 @@ const BillingDashboard: React.FC<BillingDashboardProps> = ({ onViewPayment, onDe
       totalPaid: payment.amount
     });
   };
+  
+// Baixa rápida: persiste no Supabase e refaz o fetch
+const handleQuickPay = async (payment: Payment) => {
+  try {
+    const { markInstallmentPaid, syncPaymentsFromLoan } = await import('../services/payments');
+    const today = new Date().toISOString().split('T')[0];
+
+    // usa os valores da própria parcela como padrão
+    await markInstallmentPaid(payment.id, {
+      payment_date: today,
+      total: Number(payment.amount),
+      principal_amount: Number(payment.principalAmount ?? payment.amount * 0.7),
+      interest_amount: Number(payment.interestAmount ?? payment.amount * 0.3),
+      penalty: Number(payment.penalty ?? 0),
+    });
+
+    await syncPaymentsFromLoan(payment.loanId).catch(() => {});
+    await refetchPaymentsByLoan(payment.loanId);
+
+    alert('✅ Baixa rápida registrada com sucesso!');
+  } catch (error) {
+    console.error('❌ Erro na baixa rápida:', error);
+    alert('Erro na baixa rápida.');
+  }
+};
 
   const handleConfirmPayment = async () => {
     if (!showPaymentModal) return;
