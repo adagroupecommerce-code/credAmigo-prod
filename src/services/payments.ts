@@ -51,7 +51,6 @@ export async function getAllPayments() {
   return (data as PaymentRow[]).map(mapToPayment);
 }
 
-
 /** Busca apenas as parcelas de um empréstimo específico */
 export async function getPaymentsByLoan(loanId: string) {
   const { data, error } = await supabase
