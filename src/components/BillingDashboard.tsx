@@ -42,6 +42,36 @@ const BillingDashboard: React.FC<BillingDashboardProps> = ({ onViewPayment, onDe
       setLoading(true);
       const data = await getAllPayments();
 
+      // Se não houver pagamentos, sincronizar empréstimos existentes
+      if (!data || data.length === 0) {
+        console.log('⚠️ Nenhum pagamento encontrado. Sincronizando empréstimos...');
+        const { syncAllLoansPayments } = await import('../services/loans');
+        await syncAllLoansPayments();
+
+        // Buscar novamente
+        const newData = await getAllPayments();
+
+        if (newData && newData.length > 0) {
+          const transformedPayments: Payment[] = newData.map((p: any) => ({
+            id: p.id,
+            loanId: p.loan_id,
+            installmentNumber: p.installment_number,
+            amount: p.amount,
+            principalAmount: p.principal_amount || 0,
+            interestAmount: p.interest_amount || 0,
+            penalty: p.penalty || 0,
+            dueDate: p.due_date,
+            paymentDate: p.payment_date,
+            status: p.status,
+            clientName: p.loans?.clients?.name || 'Cliente Desconhecido',
+            loanAmount: p.loans?.amount || 0
+          }));
+          setPayments(transformedPayments);
+          console.log('✅ Payments sincronizados:', transformedPayments.length);
+          return;
+        }
+      }
+
       // Transformar para formato Payment
       const transformedPayments: Payment[] = data.map((p: any) => ({
         id: p.id,
