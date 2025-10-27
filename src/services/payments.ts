@@ -117,6 +117,10 @@ export async function markInstallmentPaid(
 
   if (error) throw error;
 
+  // 2.5. Sincronizar contador de parcelas pagas
+  console.log('🔄 [PAYMENT] Sincronizando parcelas pagas...');
+  await syncPaidInstallments(paymentData.loan_id);
+
   // 3. Criar transação de entrada e atualizar saldo da conta
   const loan = paymentData.loans as any;
   if (loan?.account_id) {
@@ -262,6 +266,94 @@ export async function syncAllLoansPayments() {
     console.log('✅ Sincronização de parcelas concluída!');
   } catch (error) {
     console.error('❌ Erro na sincronização de parcelas:', error);
+    throw error;
+  }
+}
+
+/**
+ * Sincroniza o contador de parcelas pagas na tabela loans
+ * Conta quantas parcelas estão com status 'paid' e atualiza o campo paid_installments
+ */
+export async function syncPaidInstallments(loanId: string) {
+  try {
+    console.log(`🔄 [SYNC] Sincronizando parcelas pagas do empréstimo ${loanId}...`);
+
+    // Contar parcelas pagas
+    const { data: paidPayments, error: countError } = await supabase
+      .from('payments')
+      .select('id', { count: 'exact' })
+      .eq('loan_id', loanId)
+      .eq('status', 'paid');
+
+    if (countError) throw countError;
+
+    const paidCount = paidPayments?.length || 0;
+    console.log(`📊 [SYNC] Encontradas ${paidCount} parcelas pagas`);
+
+    // Atualizar o empréstimo
+    const { data: loan, error: updateError } = await supabase
+      .from('loans')
+      .update({
+        paid_installments: paidCount,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', loanId)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+
+    console.log(`✅ [SYNC] Empréstimo atualizado: ${paidCount}/${loan.installments} parcelas pagas`);
+
+    // Se todas as parcelas foram pagas, marcar como completed
+    if (paidCount >= loan.installments && loan.status !== 'completed') {
+      console.log('🎉 [SYNC] Todas as parcelas pagas! Marcando empréstimo como finalizado...');
+
+      const { error: statusError } = await supabase
+        .from('loans')
+        .update({
+          status: 'completed',
+          remaining_amount: 0,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', loanId);
+
+      if (statusError) throw statusError;
+      console.log('✅ [SYNC] Empréstimo marcado como finalizado');
+    }
+
+    return { paidCount, totalInstallments: loan.installments };
+  } catch (error) {
+    console.error('❌ [SYNC] Erro ao sincronizar parcelas pagas:', error);
+    throw error;
+  }
+}
+
+/**
+ * Sincroniza todos os empréstimos
+ * Útil para corrigir inconsistências
+ */
+export async function syncAllLoans() {
+  try {
+    console.log('🔄 [SYNC ALL] Iniciando sincronização de todos os empréstimos...');
+
+    // Buscar todos os empréstimos
+    const { data: loans, error } = await supabase
+      .from('loans')
+      .select('id, installments');
+
+    if (error) throw error;
+
+    console.log(`📋 [SYNC ALL] Encontrados ${loans?.length || 0} empréstimos`);
+
+    // Sincronizar cada um
+    for (const loan of loans || []) {
+      await syncPaidInstallments(loan.id);
+    }
+
+    console.log('✅ [SYNC ALL] Sincronização completa!');
+  } catch (error) {
+    console.error('❌ [SYNC ALL] Erro na sincronização:', error);
     throw error;
   }
 }

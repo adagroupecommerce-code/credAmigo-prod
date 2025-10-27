@@ -125,6 +125,18 @@ export const useLoans = () => {
 
   useEffect(() => {
     fetchLoans();
+
+    // Escutar evento de pagamento realizado
+    const handlePaymentMade = () => {
+      console.log('🔔 [LOANS HOOK] Pagamento realizado! Recarregando empréstimos...');
+      fetchLoans();
+    };
+
+    window.addEventListener('payment-made', handlePaymentMade);
+
+    return () => {
+      window.removeEventListener('payment-made', handlePaymentMade);
+    };
   }, []);
 
   return {
