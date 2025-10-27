@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Upload, X, User, Phone, Mail, MapPin, Building, FileText, Camera, CreditCard, Save } from 'lucide-react';
+import { ArrowLeft, Upload, X, User, Phone, Mail, MapPin, Building, FileText, Camera, CreditCard, Save, Eye, Download } from 'lucide-react';
 import { Client } from '../types';
 
 interface ClientFormProps {
@@ -40,6 +40,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ client, onSave, onCancel, isEdi
 
   const [uploadedFiles, setUploadedFiles] = useState<{ [key: string]: File }>({});
   const [activeTab, setActiveTab] = useState('personal');
+  const [viewingDocument, setViewingDocument] = useState<{ type: string; url: string; label: string } | null>(null);
 
   const handleInputChange = (field: string, value: string, section?: string) => {
     if (section) {
@@ -79,6 +80,30 @@ const ClientForm: React.FC<ClientFormProps> = ({ client, onSave, onCancel, isEdi
         [documentType]: undefined
       }
     }));
+  };
+
+  const handleViewDocument = (documentType: string, label: string) => {
+    const documentUrl = formData.documents?.[documentType as keyof typeof formData.documents];
+    if (documentUrl) {
+      console.log('📄 Visualizando documento:', label, documentUrl);
+      setViewingDocument({ type: documentType, url: documentUrl as string, label });
+    }
+  };
+
+  const handleDownloadDocument = (documentType: string, label: string) => {
+    const documentUrl = formData.documents?.[documentType as keyof typeof formData.documents];
+    if (documentUrl) {
+      console.log('⬇️ Baixando documento:', label, documentUrl);
+
+      const link = document.createElement('a');
+      link.href = documentUrl as string;
+      link.download = `${formData.name?.replace(/\s+/g, '_') || 'Cliente'}_${label.replace(/\s+/g, '_')}.${(documentUrl as string).split('.').pop()}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      alert(`Download iniciado: ${label}`);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -175,11 +200,33 @@ const ClientForm: React.FC<ClientFormProps> = ({ client, onSave, onCancel, isEdi
         </div>
         
         {hasFile ? (
-          <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded">
-            <FileText size={16} className="text-green-600" />
-            <span className="text-sm text-green-800">
-              {uploadedFiles[type]?.name || formData.documents?.[type as keyof typeof formData.documents]}
-            </span>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded">
+              <FileText size={16} className="text-green-600" />
+              <span className="text-sm text-green-800 flex-1">
+                {uploadedFiles[type]?.name || formData.documents?.[type as keyof typeof formData.documents]}
+              </span>
+            </div>
+            {!uploadedFiles[type] && formData.documents?.[type as keyof typeof formData.documents] && (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleViewDocument(type, label)}
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors text-sm"
+                >
+                  <Eye size={16} />
+                  Visualizar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadDocument(type, label)}
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-green-600 border border-green-200 rounded hover:bg-green-50 transition-colors text-sm"
+                >
+                  <Download size={16} />
+                  Baixar
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors">
@@ -571,6 +618,52 @@ const ClientForm: React.FC<ClientFormProps> = ({ client, onSave, onCancel, isEdi
           </button>
         </div>
       </form>
+
+      {/* Modal de Visualização de Documento */}
+      {viewingDocument && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <FileText size={20} />
+                {viewingDocument.label} - {formData.name || 'Cliente'}
+              </h3>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleDownloadDocument(viewingDocument.type, viewingDocument.label)}
+                  className="p-2 text-green-600 hover:bg-green-100 rounded-lg transition-colors"
+                  title="Baixar documento"
+                >
+                  <Download size={20} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewingDocument(null)}
+                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+            <div className="p-4 overflow-auto max-h-[calc(90vh-80px)]">
+              {viewingDocument.url.toLowerCase().endsWith('.pdf') ? (
+                <iframe
+                  src={viewingDocument.url}
+                  className="w-full h-[600px] border border-gray-200 rounded"
+                  title={viewingDocument.label}
+                />
+              ) : (
+                <img
+                  src={viewingDocument.url}
+                  alt={viewingDocument.label}
+                  className="max-w-full h-auto mx-auto rounded border border-gray-200"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, User, Phone, Mail, MapPin, Building, FileText, Star, TrendingUp, Clock, CheckCircle, AlertTriangle, MessageSquare, Plus, Calendar, Flag, Trash2, Edit } from 'lucide-react';
+import { ArrowLeft, User, Phone, Mail, MapPin, Building, FileText, Star, TrendingUp, Clock, CheckCircle, AlertTriangle, MessageSquare, Plus, Calendar, Flag, Trash2, Edit, Eye, Download, X } from 'lucide-react';
 import { Client, Loan } from '../types';
 import { useLoans } from '../hooks/useLoans';
 import { useRBAC } from '../hooks/useRBAC';
@@ -137,14 +137,63 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client, onBack, onEdit, o
   };
 
 
-  const DocumentStatus = ({ label, hasDocument }: { label: string; hasDocument: boolean }) => (
-    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+  const [viewingDocument, setViewingDocument] = React.useState<{ type: string; url: string; label: string } | null>(null);
+
+  const handleViewDocument = (documentType: string, label: string) => {
+    const documentUrl = client.documents[documentType as keyof typeof client.documents];
+    if (documentUrl) {
+      console.log('📄 Visualizando documento:', label, documentUrl);
+      setViewingDocument({ type: documentType, url: documentUrl as string, label });
+    }
+  };
+
+  const handleDownloadDocument = (documentType: string, label: string) => {
+    const documentUrl = client.documents[documentType as keyof typeof client.documents];
+    if (documentUrl) {
+      console.log('⬇️ Baixando documento:', label, documentUrl);
+
+      // Criar link temporário e disparar download
+      const link = document.createElement('a');
+      link.href = documentUrl as string;
+      link.download = `${client.name.replace(/\s+/g, '_')}_${label.replace(/\s+/g, '_')}.${(documentUrl as string).split('.').pop()}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      alert(`Download iniciado: ${label}`);
+    }
+  };
+
+  const DocumentStatus = ({
+    label,
+    hasDocument,
+    documentType
+  }: {
+    label: string;
+    hasDocument: boolean;
+    documentType: string;
+  }) => (
+    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
       <span className="text-sm font-medium text-gray-700">{label}</span>
       <div className="flex items-center gap-2">
         {hasDocument ? (
           <>
             <CheckCircle size={16} className="text-green-600" />
-            <span className="text-sm text-green-600">Enviado</span>
+            <span className="text-sm text-green-600 mr-2">Enviado</span>
+            <button
+              onClick={() => handleViewDocument(documentType, label)}
+              className="p-1.5 text-blue-600 hover:bg-blue-100 rounded transition-colors"
+              title="Visualizar documento"
+            >
+              <Eye size={16} />
+            </button>
+            <button
+              onClick={() => handleDownloadDocument(documentType, label)}
+              className="p-1.5 text-green-600 hover:bg-green-100 rounded transition-colors"
+              title="Baixar documento"
+            >
+              <Download size={16} />
+            </button>
           </>
         ) : (
           <>
@@ -571,11 +620,11 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client, onBack, onEdit, o
               Documentos
             </h2>
             <div className="space-y-3">
-              <DocumentStatus label="Selfie" hasDocument={!!client.documents.selfie} />
-              <DocumentStatus label="CNH" hasDocument={!!client.documents.cnh} />
-              <DocumentStatus label="Comprovante de Residência" hasDocument={!!client.documents.proofOfResidence} />
-              <DocumentStatus label="Contra Cheque" hasDocument={!!client.documents.payStub} />
-              <DocumentStatus label="Carteira de Trabalho" hasDocument={!!client.documents.workCard} />
+              <DocumentStatus label="Selfie" hasDocument={!!client.documents.selfie} documentType="selfie" />
+              <DocumentStatus label="CNH" hasDocument={!!client.documents.cnh} documentType="cnh" />
+              <DocumentStatus label="Comprovante de Residência" hasDocument={!!client.documents.proofOfResidence} documentType="proofOfResidence" />
+              <DocumentStatus label="Contra Cheque" hasDocument={!!client.documents.payStub} documentType="payStub" />
+              <DocumentStatus label="Carteira de Trabalho" hasDocument={!!client.documents.workCard} documentType="workCard" />
             </div>
           </div>
         </div>
@@ -649,6 +698,50 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client, onBack, onEdit, o
                   {client.activeLoans > 0 ? 'Não é Possível Excluir' : 'Excluir Cliente'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Visualização de Documento */}
+      {viewingDocument && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <FileText size={20} />
+                {viewingDocument.label} - {client.name}
+              </h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleDownloadDocument(viewingDocument.type, viewingDocument.label)}
+                  className="p-2 text-green-600 hover:bg-green-100 rounded-lg transition-colors"
+                  title="Baixar documento"
+                >
+                  <Download size={20} />
+                </button>
+                <button
+                  onClick={() => setViewingDocument(null)}
+                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+            <div className="p-4 overflow-auto max-h-[calc(90vh-80px)]">
+              {viewingDocument.url.toLowerCase().endsWith('.pdf') ? (
+                <iframe
+                  src={viewingDocument.url}
+                  className="w-full h-[600px] border border-gray-200 rounded"
+                  title={viewingDocument.label}
+                />
+              ) : (
+                <img
+                  src={viewingDocument.url}
+                  alt={viewingDocument.label}
+                  className="max-w-full h-auto mx-auto rounded border border-gray-200"
+                />
+              )}
             </div>
           </div>
         </div>
