@@ -4,13 +4,19 @@ import { CashAccount, Transaction } from '../types/financial';
 import { TRANSACTION_CATEGORIES } from '../types/financial';
 import { listCashAccounts, createCashAccount, updateCashAccount, deleteCashAccount } from '@/services/cashAccounts';
 import { listTransactions, createTransaction, updateTransaction, deleteTransaction } from '@/services/transactions';
+import { useRBAC } from '../hooks/useRBAC';
+import { RBAC_RESOURCES, RBAC_ACTIONS } from '../types/rbac';
 
 const CashBankManagement = () => {
+  const { hasPermission } = useRBAC();
+  const canEditAccounts = hasPermission(RBAC_RESOURCES.SETTINGS, RBAC_ACTIONS.UPDATE);
+
   const [accounts, setAccounts] = useState<CashAccount[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNewAccountForm, setShowNewAccountForm] = useState(false);
   const [showNewTransactionForm, setShowNewTransactionForm] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<CashAccount | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<string>('all');
   const [transactionFilter, setTransactionFilter] = useState<'all' | 'income' | 'expense'>('all');
   const [dateFilter, setDateFilter] = useState<string>('');
@@ -116,6 +122,45 @@ const CashBankManagement = () => {
       console.error('Erro ao criar conta:', error);
       alert('Erro ao criar conta');
     }
+  };
+
+  const handleEditAccount = (account: CashAccount) => {
+    if (!canEditAccounts) {
+      alert('Você não tem permissão para editar contas. Apenas administradores podem realizar esta ação.');
+      return;
+    }
+    setEditingAccount(account);
+  };
+
+  const handleUpdateAccount = async () => {
+    if (!editingAccount) return;
+
+    if (!editingAccount.name) {
+      alert('Por favor, preencha o nome da conta');
+      return;
+    }
+
+    try {
+      console.log('🔄 Atualizando conta:', editingAccount.id);
+      await updateCashAccount(editingAccount.id, {
+        name: editingAccount.name,
+        type: editingAccount.type,
+        balance: editingAccount.balance,
+        currency: editingAccount.currency || 'BRL',
+        is_active: editingAccount.isActive
+      });
+      console.log('✅ Conta atualizada com sucesso');
+      await loadData();
+      setEditingAccount(null);
+      alert('Conta atualizada com sucesso!');
+    } catch (error) {
+      console.error('❌ Erro ao atualizar conta:', error);
+      alert('Erro ao atualizar conta');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingAccount(null);
   };
 
   const handleCreateTransaction = async () => {
@@ -257,11 +302,28 @@ const CashBankManagement = () => {
                 Atualizado em {formatDate(account.updatedAt)}
               </div>
               <div className="flex gap-2 mt-3">
-                <button className="flex-1 px-2 py-1 text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors text-sm">
+                <button
+                  onClick={() => handleEditAccount(account)}
+                  disabled={!canEditAccounts}
+                  className={`flex-1 px-2 py-1 border rounded text-sm transition-colors ${
+                    canEditAccounts
+                      ? 'text-blue-600 border-blue-200 hover:bg-blue-50'
+                      : 'text-gray-400 border-gray-200 cursor-not-allowed opacity-50'
+                  }`}
+                  title={!canEditAccounts ? 'Apenas administradores podem editar contas' : 'Editar conta'}
+                >
                   <Edit size={12} className="inline mr-1" />
                   Editar
                 </button>
-                <button className="px-2 py-1 text-red-600 border border-red-200 rounded hover:bg-red-50 transition-colors text-sm">
+                <button
+                  disabled={!canEditAccounts}
+                  className={`px-2 py-1 border rounded text-sm transition-colors ${
+                    canEditAccounts
+                      ? 'text-red-600 border-red-200 hover:bg-red-50'
+                      : 'text-gray-400 border-gray-200 cursor-not-allowed opacity-50'
+                  }`}
+                  title={!canEditAccounts ? 'Apenas administradores podem excluir contas' : 'Excluir conta'}
+                >
                   <Trash2 size={12} />
                 </button>
               </div>
@@ -317,6 +379,73 @@ const CashBankManagement = () => {
               </button>
               <button
                 onClick={() => setShowNewAccountForm(false)}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Formulário Editar Conta */}
+        {editingAccount && (
+          <div className="mt-6 p-4 bg-blue-50 border border-blue-300 rounded-lg">
+            <h3 className="font-medium text-gray-900 mb-4 flex items-center">
+              <Edit size={16} className="mr-2 text-blue-600" />
+              Editar Conta
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Nome da Conta</label>
+                <input
+                  type="text"
+                  value={editingAccount.name}
+                  onChange={(e) => setEditingAccount(prev => prev ? { ...prev, name: e.target.value } : null)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Ex: Banco do Brasil - CC"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Tipo</label>
+                <select
+                  value={editingAccount.type}
+                  onChange={(e) => setEditingAccount(prev => prev ? { ...prev, type: e.target.value as CashAccount['type'] } : null)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="cash">Caixa</option>
+                  <option value="bank">Banco</option>
+                  <option value="investment">Investimento</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Saldo Atual
+                  <span className="ml-2 text-xs text-amber-600 font-normal">
+                    ⚠️ Cuidado ao alterar
+                  </span>
+                </label>
+                <input
+                  type="number"
+                  value={editingAccount.balance}
+                  onChange={(e) => setEditingAccount(prev => prev ? { ...prev, balance: Number(e.target.value) } : null)}
+                  className="w-full px-3 py-2 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-amber-50"
+                  placeholder="0.00"
+                  step="0.01"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Altere o saldo apenas se houver um erro. Use transações para movimentar valores.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={handleUpdateAccount}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Salvar Alterações
+              </button>
+              <button
+                onClick={handleCancelEdit}
                 className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Cancelar
