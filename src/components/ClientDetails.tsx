@@ -5,6 +5,7 @@ import { useLoans } from '../hooks/useLoans';
 import { useRBAC } from '../hooks/useRBAC';
 import { RBAC_RESOURCES, RBAC_ACTIONS } from '../types/rbac';
 import RBACButton from './RBACButton';
+import { downloadDocument, deleteDocument } from '../services/documents';
 
 interface ClientDetailsProps {
   client: Client;
@@ -147,20 +148,49 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client, onBack, onEdit, o
     }
   };
 
-  const handleDownloadDocument = (documentType: string, label: string) => {
+  const handleDownloadDocument = async (documentType: string, label: string) => {
     const documentUrl = client.documents[documentType as keyof typeof client.documents];
     if (documentUrl) {
-      console.log('⬇️ Baixando documento:', label, documentUrl);
+      const fileName = `${client.name.replace(/\s+/g, '_')}_${label.replace(/\s+/g, '_')}.${(documentUrl as string).split('.').pop()}`;
 
-      // Criar link temporário e disparar download
-      const link = document.createElement('a');
-      link.href = documentUrl as string;
-      link.download = `${client.name.replace(/\s+/g, '_')}_${label.replace(/\s+/g, '_')}.${(documentUrl as string).split('.').pop()}`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      const success = await downloadDocument(documentUrl as string, fileName);
 
-      alert(`Download iniciado: ${label}`);
+      if (success) {
+        alert(`Download concluído: ${label}`);
+      } else {
+        alert(`Erro ao baixar documento: ${label}`);
+      }
+    }
+  };
+
+  const handleDeleteDocument = async (documentType: string, label: string) => {
+    const documentUrl = client.documents[documentType as keyof typeof client.documents];
+    if (!documentUrl) return;
+
+    const confirmDelete = window.confirm(
+      `Tem certeza que deseja excluir o documento "${label}"?\n\nEsta ação não pode ser desfeita.`
+    );
+
+    if (!confirmDelete) return;
+
+    console.log('🗑️ Excluindo documento:', label);
+
+    const success = await deleteDocument(documentUrl as string);
+
+    if (success) {
+      // Atualizar cliente removendo o documento
+      const updatedClient = {
+        ...client,
+        documents: {
+          ...client.documents,
+          [documentType]: undefined
+        }
+      };
+
+      onUpdateClient(updatedClient);
+      alert(`Documento "${label}" excluído com sucesso!`);
+    } else {
+      alert(`Erro ao excluir documento: ${label}`);
     }
   };
 
@@ -193,6 +223,13 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client, onBack, onEdit, o
               title="Baixar documento"
             >
               <Download size={16} />
+            </button>
+            <button
+              onClick={() => handleDeleteDocument(documentType, label)}
+              className="p-1.5 text-red-600 hover:bg-red-100 rounded transition-colors"
+              title="Excluir documento"
+            >
+              <Trash2 size={16} />
             </button>
           </>
         ) : (

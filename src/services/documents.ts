@@ -130,3 +130,46 @@ export async function listClientDocuments(clientId: string) {
     return [];
   }
 }
+
+/**
+ * Baixa um documento do Supabase Storage
+ * @param documentUrl - URL pública do documento
+ * @param fileName - Nome para salvar o arquivo
+ * @returns true se baixado com sucesso
+ */
+export async function downloadDocument(documentUrl: string, fileName: string): Promise<boolean> {
+  try {
+    console.log('⬇️ [DOWNLOAD] Baixando documento:', documentUrl);
+
+    // Fazer fetch do arquivo
+    const response = await fetch(documentUrl);
+
+    if (!response.ok) {
+      throw new Error(`Erro ao baixar: ${response.statusText}`);
+    }
+
+    // Converter para blob
+    const blob = await response.blob();
+    console.log(`✅ [DOWNLOAD] Blob criado: ${(blob.size / 1024).toFixed(2)} KB`);
+
+    // Criar URL temporária do blob
+    const blobUrl = window.URL.createObjectURL(blob);
+
+    // Criar link e fazer download
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // Limpar URL temporária
+    window.URL.revokeObjectURL(blobUrl);
+
+    console.log('✅ [DOWNLOAD] Download concluído:', fileName);
+    return true;
+  } catch (error) {
+    console.error('❌ [DOWNLOAD] Erro ao baixar documento:', error);
+    return false;
+  }
+}

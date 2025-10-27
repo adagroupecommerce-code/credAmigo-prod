@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Upload, X, User, Phone, Mail, MapPin, Building, FileText, Camera, CreditCard, Save, Eye, Download, Loader2 } from 'lucide-react';
+import { ArrowLeft, Upload, X, User, Phone, Mail, MapPin, Building, FileText, Camera, CreditCard, Save, Eye, Download, Loader2, Trash2 } from 'lucide-react';
 import { Client } from '../types';
-import { uploadDocument, deleteDocument } from '../services/documents';
+import { uploadDocument, deleteDocument, downloadDocument } from '../services/documents';
 
 interface ClientFormProps {
   client?: Client;
@@ -128,19 +128,53 @@ const ClientForm: React.FC<ClientFormProps> = ({ client, onSave, onCancel, isEdi
     }
   };
 
-  const handleDownloadDocument = (documentType: string, label: string) => {
+  const handleDownloadDocument = async (documentType: string, label: string) => {
     const documentUrl = formData.documents?.[documentType as keyof typeof formData.documents];
     if (documentUrl) {
-      console.log('⬇️ Baixando documento:', label, documentUrl);
+      const fileName = `${formData.name?.replace(/\s+/g, '_') || 'Cliente'}_${label.replace(/\s+/g, '_')}.${(documentUrl as string).split('.').pop()}`;
 
-      const link = document.createElement('a');
-      link.href = documentUrl as string;
-      link.download = `${formData.name?.replace(/\s+/g, '_') || 'Cliente'}_${label.replace(/\s+/g, '_')}.${(documentUrl as string).split('.').pop()}`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      const success = await downloadDocument(documentUrl as string, fileName);
 
-      alert(`Download iniciado: ${label}`);
+      if (success) {
+        alert(`Download concluído: ${label}`);
+      } else {
+        alert(`Erro ao baixar documento: ${label}`);
+      }
+    }
+  };
+
+  const handleDeleteDocumentFromForm = async (documentType: string, label: string) => {
+    const documentUrl = formData.documents?.[documentType as keyof typeof formData.documents];
+    if (!documentUrl) return;
+
+    const confirmDelete = window.confirm(
+      `Tem certeza que deseja excluir o documento "${label}"?\n\nEsta ação não pode ser desfeita.`
+    );
+
+    if (!confirmDelete) return;
+
+    console.log('🗑️ Excluindo documento:', label);
+
+    const success = await deleteDocument(documentUrl as string);
+
+    if (success) {
+      // Remover do estado
+      setUploadedFiles(prev => {
+        const newFiles = { ...prev };
+        delete newFiles[documentType];
+        return newFiles;
+      });
+      setFormData(prev => ({
+        ...prev,
+        documents: {
+          ...prev.documents,
+          [documentType]: undefined
+        }
+      }));
+
+      alert(`Documento "${label}" excluído com sucesso!`);
+    } else {
+      alert(`Erro ao excluir documento: ${label}`);
     }
   };
 
@@ -251,22 +285,32 @@ const ClientForm: React.FC<ClientFormProps> = ({ client, onSave, onCancel, isEdi
               </span>
             </div>
             {!uploadedFiles[type] && formData.documents?.[type as keyof typeof formData.documents] && (
-              <div className="flex gap-2">
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleViewDocument(type, label)}
+                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors text-sm"
+                  >
+                    <Eye size={16} />
+                    Visualizar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadDocument(type, label)}
+                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-green-600 border border-green-200 rounded hover:bg-green-50 transition-colors text-sm"
+                  >
+                    <Download size={16} />
+                    Baixar
+                  </button>
+                </div>
                 <button
                   type="button"
-                  onClick={() => handleViewDocument(type, label)}
-                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors text-sm"
+                  onClick={() => handleDeleteDocumentFromForm(type, label)}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 text-red-600 border border-red-200 rounded hover:bg-red-50 transition-colors text-sm"
                 >
-                  <Eye size={16} />
-                  Visualizar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDownloadDocument(type, label)}
-                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-green-600 border border-green-200 rounded hover:bg-green-50 transition-colors text-sm"
-                >
-                  <Download size={16} />
-                  Baixar
+                  <Trash2 size={16} />
+                  Excluir Documento
                 </button>
               </div>
             )}
