@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { upsertPayment, createPaymentsForLoan } from './payments';
+import { createPaymentsForLoan } from './payments';
 
 export async function listLoans() {
   const { data, error } = await supabase

@@ -49,39 +49,34 @@ export const useLoans = () => {
 
   const createLoan = async (loanData: Partial<Loan>) => {
     try {
-      // Buscar nome do cliente
-      const { data: clientData, error: clientError } = await supabase
-        .from('clients')
-        .select('name')
-        .eq('id', loanData.clientId)
-        .single();
+      // Usar o serviço que cria empréstimo + parcelas + transações automaticamente
+      const { createLoan: createLoanService } = await import('../services/loans');
 
-      if (clientError) throw clientError;
+      const result = await createLoanService({
+        client_id: loanData.clientId!,
+        amount: loanData.amount!,
+        interest_rate: loanData.interestRate!,
+        installments: loanData.installments!,
+        installment_value: loanData.installmentValue!,
+        total_amount: loanData.totalAmount!,
+        start_date: loanData.startDate!,
+        end_date: loanData.endDate!,
+        remaining_amount: loanData.remainingAmount!,
+        account_id: (loanData as any).accountId,
+        status: loanData.status || 'active',
+        paid_installments: loanData.paidInstallments || 0,
+        notes: loanData.notes || null,
+        installment_plan: loanData.installmentPlan || null
+      });
 
-      const { data, error } = await supabase
-        .from('loans')
-        .insert({
-          client_id: loanData.clientId!,
-          amount: loanData.amount!,
-          interest_rate: loanData.interestRate!,
-          installments: loanData.installments!,
-          installment_value: loanData.installmentValue!,
-          total_amount: loanData.totalAmount!,
-          start_date: loanData.startDate!,
-          end_date: loanData.endDate!,
-          status: loanData.status || 'active',
-          paid_installments: loanData.paidInstallments || 0,
-          remaining_amount: loanData.remainingAmount!,
-          notes: loanData.notes
-        })
-        .select()
-        .single();
+      console.log('✅ Empréstimo criado com sucesso:', result);
 
-      if (error) throw error;
+      // Recarregar lista de empréstimos
+      await fetchLoans();
 
-      await fetchLoans(); // Recarregar lista
-      return data;
+      return result;
     } catch (err) {
+      console.error('❌ Erro ao criar empréstimo:', err);
       setError(err instanceof Error ? err.message : 'Erro ao criar empréstimo');
       throw err;
     }

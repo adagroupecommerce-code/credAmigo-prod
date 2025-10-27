@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, TrendingDown, PieChart, BarChart3, Calendar, Plus, Filter, Download, Eye, CheckCircle } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, PieChart, BarChart3, Calendar, Plus, Filter, Download, Eye, CheckCircle, RefreshCw } from 'lucide-react';
 import CashBankManagement from './CashBankManagement';
 import CashFlowManagement from './CashFlowManagement';
 import DREManagement from './DREManagement';
@@ -12,14 +12,25 @@ const FinancialDashboard = () => {
 
   useEffect(() => {
     loadFinancialData();
+
+    // Atualizar dados a cada 10 segundos
+    const interval = setInterval(() => {
+      loadFinancialData();
+    }, 10000);
+
+    return () => clearInterval(interval);
   }, []);
 
+  // Recarregar ao mudar de aba
+  useEffect(() => {
+    loadFinancialData();
+  }, [activeTab]);
+
   const loadFinancialData = async () => {
-    setLoading(true);
     try {
       const data = await getFinancialOverview();
       setFinancialData(data);
-      console.log('✅ Dados financeiros carregados:', data);
+      console.log('✅ Dados financeiros atualizados:', data);
     } catch (error) {
       console.error('❌ Erro ao carregar dados financeiros:', error);
     } finally {
@@ -236,13 +247,16 @@ const FinancialDashboard = () => {
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Módulo Financeiro</h1>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <button
+            onClick={() => loadFinancialData()}
+            className="flex items-center justify-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors touch-manipulation"
+          >
+            <RefreshCw size={20} className="mr-2" />
+            Atualizar
+          </button>
           <button className="flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors touch-manipulation">
             <Download size={20} className="mr-2" />
             Exportar
-          </button>
-          <button className="flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors touch-manipulation">
-            <Plus size={20} className="mr-2" />
-            Nova Transação
           </button>
         </div>
       </div>

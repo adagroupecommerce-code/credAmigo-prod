@@ -94,7 +94,21 @@ const BillingDashboard: React.FC<BillingDashboardProps> = ({ onViewPayment, onDe
 
   useEffect(() => {
     fetchPayments();
+
+    // Atualizar parcelas a cada 10 segundos
+    const interval = setInterval(() => {
+      fetchPayments();
+    }, 10000);
+
+    return () => clearInterval(interval);
   }, []);
+
+  // Recarregar quando a lista de empréstimos mudar
+  useEffect(() => {
+    if (loans.length > 0) {
+      fetchPayments();
+    }
+  }, [loans.length]);
 
 useEffect(() => {
   // 1) índices rápidos pra não ficar dando find a cada item
