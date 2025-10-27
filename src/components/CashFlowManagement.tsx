@@ -1,15 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Calendar, Filter, Download, Plus, ArrowUpRight, ArrowDownLeft, BarChart3 } from 'lucide-react';
-import { CashFlowProjection } from '../types/financial';
-import { mockCashFlowProjection } from '../data/financialData';
+import { getCashFlowProjection, CashFlowProjection } from '../services/financial';
 
 const CashFlowManagement = () => {
-  const [projections, setProjections] = useState<CashFlowProjection[]>(mockCashFlowProjection);
-  const [viewMode, setViewMode] = useState<'daily' | 'weekly' | 'monthly'>('daily');
-  const [dateRange, setDateRange] = useState({
-    start: new Date().toISOString().split('T')[0],
-    end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-  });
+  const [projections, setProjections] = useState<CashFlowProjection[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadCashFlowProjection();
+  }, []);
+
+  const loadCashFlowProjection = async () => {
+    setLoading(true);
+    try {
+      const data = await getCashFlowProjection();
+      setProjections(data);
+      console.log('✅ Projeção de fluxo de caixa carregada:', data);
+    } catch (error) {
+      console.error('❌ Erro ao carregar projeção:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -23,20 +35,19 @@ const CashFlowManagement = () => {
   };
 
   const getTotalInflows = () => {
-    return projections.reduce((sum, p) => sum + p.inflows.total, 0);
+    return projections.reduce((sum, p) => sum + p.expectedRevenue, 0);
   };
 
   const getTotalOutflows = () => {
-    return projections.reduce((sum, p) => sum + p.outflows.total, 0);
+    return projections.reduce((sum, p) => sum + p.expectedExpenses, 0);
   };
 
   const getNetFlow = () => {
-    return getTotalInflows() - getTotalOutflows();
+    return projections.reduce((sum, p) => sum + p.netFlow, 0);
   };
 
   const getProjectedBalance = () => {
-    const lastProjection = projections[projections.length - 1];
-    return lastProjection ? lastProjection.closingBalance : 0;
+    return getNetFlow();
   };
 
   const StatCard = ({ 

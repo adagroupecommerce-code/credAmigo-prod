@@ -1,12 +1,31 @@
-import React, { useState } from 'react';
-import { DollarSign, TrendingUp, TrendingDown, PieChart, BarChart3, Calendar, Plus, Filter, Download, Eye } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { DollarSign, TrendingUp, TrendingDown, PieChart, BarChart3, Calendar, Plus, Filter, Download, Eye, CheckCircle } from 'lucide-react';
 import CashBankManagement from './CashBankManagement';
 import CashFlowManagement from './CashFlowManagement';
 import DREManagement from './DREManagement';
-import { mockCashAccounts, mockDREReport } from '../data/financialData';
+import { getFinancialOverview, FinancialOverview } from '../services/financial';
 
 const FinancialDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
+  const [financialData, setFinancialData] = useState<FinancialOverview | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadFinancialData();
+  }, []);
+
+  const loadFinancialData = async () => {
+    setLoading(true);
+    try {
+      const data = await getFinancialOverview();
+      setFinancialData(data);
+      console.log('✅ Dados financeiros carregados:', data);
+    } catch (error) {
+      console.error('❌ Erro ao carregar dados financeiros:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -14,9 +33,6 @@ const FinancialDashboard = () => {
       currency: 'BRL'
     }).format(value);
   };
-
-  const totalBalance = mockCashAccounts.reduce((sum, account) => sum + account.balance, 0);
-  const dreData = mockDREReport;
 
   const tabs = [
     { id: 'overview', label: 'Visão Geral', icon: BarChart3 },
@@ -71,178 +87,131 @@ const FinancialDashboard = () => {
     );
   };
 
-  const renderOverview = () => (
+  const renderOverview = () => {
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <div className="text-gray-500">Carregando dados financeiros...</div>
+        </div>
+      );
+    }
+
+    if (!financialData) {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <div className="text-red-500">Erro ao carregar dados financeiros</div>
+        </div>
+      );
+    }
+
+    const profitMargin = financialData.monthlyRevenue > 0
+      ? ((financialData.netProfit / financialData.monthlyRevenue) * 100)
+      : 0;
+
+    return (
     <div className="space-y-6">
       {/* Métricas Principais */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
-          title="Saldo Total"
-          value={formatCurrency(totalBalance)}
-          change="+12.5% este mês"
-          changeType="positive"
+          title="Saldo em Caixa/Banco"
+          value={formatCurrency(financialData.totalBalance)}
           icon={DollarSign}
           color="blue"
         />
         <StatCard
           title="Receita Mensal"
-          value={formatCurrency(dreData.revenue.total)}
-          change="+8.3% vs mês anterior"
-          changeType="positive"
+          value={formatCurrency(financialData.monthlyRevenue)}
           icon={TrendingUp}
           color="green"
         />
         <StatCard
           title="Lucro Líquido"
-          value={formatCurrency(dreData.netProfit)}
-          change="+15.2% vs mês anterior"
-          changeType="positive"
+          value={formatCurrency(financialData.netProfit)}
+          changeType={financialData.netProfit >= 0 ? 'positive' : 'negative'}
           icon={PieChart}
-          color="purple"
+          color={financialData.netProfit >= 0 ? 'purple' : 'red'}
         />
         <StatCard
           title="Margem Líquida"
-          value={`${dreData.margins.net.toFixed(1)}%`}
-          change="+2.1pp este mês"
-          changeType="positive"
+          value={`${profitMargin.toFixed(1)}%`}
           icon={BarChart3}
           color="yellow"
         />
       </div>
 
-      {/* Resumo por Conta */}
-      <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold text-gray-900">Resumo das Contas</h2>
-          <button className="flex items-center px-3 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-            <Eye size={16} className="mr-2" />
-            Ver Detalhes
-          </button>
+      {/* Métricas de Empréstimos */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-medium text-gray-600">Total Emprestado</h3>
+            <DollarSign size={20} className="text-blue-600" />
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{formatCurrency(financialData.totalLoansValue)}</p>
+          <p className="text-xs text-gray-500 mt-2">Capital em empréstimos ativos</p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {mockCashAccounts.map((account) => (
-            <div key={account.id} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="font-medium text-gray-900">{account.name}</h3>
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  account.type === 'cash' ? 'bg-green-100 text-green-800' :
-                  account.type === 'bank' ? 'bg-blue-100 text-blue-800' :
-                  'bg-purple-100 text-purple-800'
-                }`}>
-                  {account.type === 'cash' ? 'Caixa' : 
-                   account.type === 'bank' ? 'Banco' : 'Investimento'}
-                </span>
-              </div>
-              <div className="text-lg font-bold text-gray-900">
-                {formatCurrency(account.balance)}
-              </div>
-              <div className="text-xs text-gray-500 mt-1">
-                {((account.balance / totalBalance) * 100).toFixed(1)}% do total
-              </div>
-            </div>
-          ))}
+
+        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-medium text-gray-600">A Receber</h3>
+            <TrendingUp size={20} className="text-yellow-600" />
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{formatCurrency(financialData.totalReceivable)}</p>
+          <p className="text-xs text-gray-500 mt-2">Parcelas pendentes e vencidas</p>
+        </div>
+
+        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-medium text-gray-600">Recebido (Total)</h3>
+            <CheckCircle size={20} className="text-green-600" />
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{formatCurrency(financialData.totalReceived)}</p>
+          <p className="text-xs text-gray-500 mt-2">Total de parcelas pagas</p>
         </div>
       </div>
 
-      {/* DRE Resumida */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">DRE Resumida - {dreData.period}</h2>
+      {/* Resumo Financeiro Mensal */}
+      <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Resumo Financeiro - Mês Atual</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-3">
-            <div className="flex justify-between">
-              <span className="text-gray-600">Receita Bruta</span>
-              <span className="font-medium text-green-600">{formatCurrency(dreData.revenue.total)}</span>
+            <div className="flex justify-between items-center py-2 border-b border-gray-100">
+              <span className="text-gray-600">Receita (Parcelas Pagas)</span>
+              <span className="font-semibold text-green-600">{formatCurrency(financialData.monthlyRevenue)}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">(-) Custos</span>
-              <span className="font-medium text-red-600">({formatCurrency(dreData.costs.total)})</span>
+            <div className="flex justify-between items-center py-2 border-b border-gray-100">
+              <span className="text-gray-600">Despesas Operacionais</span>
+              <span className="font-semibold text-red-600">{formatCurrency(financialData.monthlyExpenses)}</span>
             </div>
-            <div className="flex justify-between border-t border-gray-200 pt-2">
-              <span className="text-gray-900 font-medium">Lucro Bruto</span>
-              <span className="font-bold text-blue-600">{formatCurrency(dreData.grossProfit)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">(-) Despesas Operacionais</span>
-              <span className="font-medium text-red-600">({formatCurrency(dreData.expenses.total)})</span>
-            </div>
-            <div className="flex justify-between border-t border-gray-200 pt-2">
-              <span className="text-gray-900 font-medium">Lucro Operacional</span>
-              <span className="font-bold text-purple-600">{formatCurrency(dreData.operationalProfit)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Resultado Financeiro</span>
-              <span className={`font-medium ${dreData.financialResult.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {formatCurrency(dreData.financialResult.net)}
+            <div className="flex justify-between items-center py-3 border-t-2 border-gray-300 mt-2">
+              <span className="text-gray-900 font-bold text-lg">Lucro Líquido</span>
+              <span className={`font-bold text-lg ${financialData.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {formatCurrency(financialData.netProfit)}
               </span>
             </div>
-            <div className="flex justify-between border-t-2 border-gray-300 pt-3">
-              <span className="text-gray-900 font-bold">Lucro Líquido</span>
-              <span className="font-bold text-green-600 text-lg">{formatCurrency(dreData.netProfit)}</span>
-            </div>
           </div>
-        </div>
 
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Indicadores de Performance</h2>
-          <div className="space-y-4">
-            <div>
-              <div className="flex justify-between mb-2">
-                <span className="text-gray-600">Margem Bruta</span>
-                <span className="font-medium">{dreData.margins.gross.toFixed(1)}%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-green-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${dreData.margins.gross}%` }}
-                ></div>
-              </div>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center py-2 border-b border-gray-100">
+              <span className="text-gray-600">Margem de Lucro</span>
+              <span className="font-semibold text-blue-600">{profitMargin.toFixed(1)}%</span>
             </div>
-            <div>
-              <div className="flex justify-between mb-2">
-                <span className="text-gray-600">Margem Operacional</span>
-                <span className="font-medium">{dreData.margins.operational.toFixed(1)}%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-purple-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${dreData.margins.operational}%` }}
-                ></div>
-              </div>
+            <div className="flex justify-between items-center py-2 border-b border-gray-100">
+              <span className="text-gray-600">Total em Caixa/Banco</span>
+              <span className="font-semibold text-blue-600">{formatCurrency(financialData.cashInBank)}</span>
             </div>
-            <div>
-              <div className="flex justify-between mb-2">
-                <span className="text-gray-600">Margem Líquida</span>
-                <span className="font-medium">{dreData.margins.net.toFixed(1)}%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${dreData.margins.net}%` }}
-                ></div>
-              </div>
-            </div>
-            
-            <div className="pt-4 border-t border-gray-200">
-              <h3 className="font-medium text-gray-900 mb-3">Composição da Receita</h3>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Juros de Empréstimos</span>
-                  <span className="font-medium">{((dreData.revenue.loanInterest / dreData.revenue.total) * 100).toFixed(1)}%</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Taxas e Tarifas</span>
-                  <span className="font-medium">{((dreData.revenue.fees / dreData.revenue.total) * 100).toFixed(1)}%</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Outras Receitas</span>
-                  <span className="font-medium">{((dreData.revenue.other / dreData.revenue.total) * 100).toFixed(1)}%</span>
-                </div>
-              </div>
+            <div className="py-2 mt-2">
+              <p className="text-xs text-gray-500">
+                {financialData.netProfit >= 0
+                  ? '✅ Resultado positivo no mês'
+                  : '⚠️ Resultado negativo - revisar despesas'}
+              </p>
             </div>
           </div>
         </div>
       </div>
     </div>
-  );
+    );
+  };
 
   const renderContent = () => {
     switch (activeTab) {
