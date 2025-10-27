@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, User, Phone, DollarSign, Calendar, FileText, CheckCircle, X, CreditCard as Edit, Eye, ArrowRight, AlertCircle, Clock, Target, Users, Filter, Upload, Download, Archive, Archive as Unarchive, Paperclip } from 'lucide-react';
+import { Plus, User, Phone, DollarSign, Calendar, FileText, CheckCircle, X, CreditCard as Edit, Eye, ArrowRight, AlertCircle, Clock, Target, Users, Filter, Upload, Download, Archive, Archive as Unarchive, Paperclip, Trash2 } from 'lucide-react';
 import { Prospect } from '../types';
 import { useProspects } from '../hooks/useProspects';
 import { useRBAC } from '../hooks/useRBAC';
@@ -11,7 +11,7 @@ interface CRMKanbanProps {
 }
 
 const CRMKanban: React.FC<CRMKanbanProps> = ({ onConvertToClient }) => {
-  const { prospects: supabaseProspects, createProspect, updateProspect, refetch } = useProspects();
+  const { prospects: supabaseProspects, createProspect, updateProspect, deleteProspect, refetch } = useProspects();
   const [prospects, setProspects] = useState<Prospect[]>([]);
 
   // Sincronizar prospects do Supabase
@@ -313,6 +313,20 @@ const CRMKanban: React.FC<CRMKanbanProps> = ({ onConvertToClient }) => {
     }
   };
 
+  const handleDeleteProspect = async (prospectId: string, prospectName: string) => {
+    if (confirm(`Tem certeza que deseja EXCLUIR permanentemente o prospect "${prospectName}"?\n\nEsta ação não pode ser desfeita!`)) {
+      try {
+        console.log('🗑️ Excluindo prospect:', prospectId);
+        await deleteProspect(prospectId);
+        console.log('✅ Prospect excluído com sucesso!');
+        alert(`Prospect "${prospectName}" excluído com sucesso!`);
+      } catch (error) {
+        console.error('❌ Erro ao excluir prospect:', error);
+        alert('Erro ao excluir prospect.');
+      }
+    }
+  };
+
   const handleDocumentUpload = async (documentType: string, file: File) => {
     if (!uploadingProspect) return;
 
@@ -518,6 +532,16 @@ const CRMKanban: React.FC<CRMKanbanProps> = ({ onConvertToClient }) => {
                 <Unarchive size={12} />
               </button>
             )}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDeleteProspect(prospect.id, prospect.name);
+              }}
+              className="p-0.5 text-red-600 hover:bg-red-50 rounded"
+              title="Excluir prospect permanentemente"
+            >
+              <Trash2 size={12} />
+            </button>
           </div>
         </div>
       </div>

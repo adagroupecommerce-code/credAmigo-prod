@@ -124,6 +124,22 @@ export const useProspects = () => {
     }
   };
 
+  const deleteProspect = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('prospects')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      await fetchProspects(); // Recarregar lista
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao excluir prospect');
+      throw err;
+    }
+  };
+
   useEffect(() => {
     fetchProspects();
   }, []);
@@ -134,6 +150,7 @@ export const useProspects = () => {
     error,
     createProspect,
     updateProspect,
+    deleteProspect,
     refetch: fetchProspects
   };
 };

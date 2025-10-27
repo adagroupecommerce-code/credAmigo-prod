@@ -123,6 +123,22 @@ export const useLoans = () => {
     }
   };
 
+  const deleteLoan = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('loans')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      await fetchLoans(); // Recarregar lista
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao excluir empréstimo');
+      throw err;
+    }
+  };
+
   useEffect(() => {
     fetchLoans();
 
@@ -145,6 +161,7 @@ export const useLoans = () => {
     error,
     createLoan,
     updateLoan,
+    deleteLoan,
     refetch: fetchLoans
   };
 };

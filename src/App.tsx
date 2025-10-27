@@ -29,7 +29,7 @@ import { markInstallmentPaid, syncPaymentsFromLoan, getPaymentsByLoan } from './
 function App() {
   const auth = useAuthProvider();
   const { clients, loading: clientsLoading, createClient, updateClient, deleteClient, refetch: refetchClients } = useClients();
-  const { loans, loading: loansLoading, createLoan, updateLoan, refetch: refetchLoans } = useLoans();
+  const { loans, loading: loansLoading, createLoan, updateLoan, deleteLoan, refetch: refetchLoans } = useLoans();
   
   const [currentView, setCurrentView] = useState('dashboard');
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -131,9 +131,20 @@ function App() {
   };
 
   const handleDeleteLoan = async (loanId: string) => {
+    const loan = loans.find(l => l.id === loanId);
+    if (!loan) return;
+
+    const confirmDelete = window.confirm(
+      `Tem certeza que deseja EXCLUIR permanentemente o empréstimo de ${loan.clientName}?\n\n` +
+      `Valor: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(loan.amount)}\n\n` +
+      `Esta ação não pode ser desfeita!`
+    );
+
+    if (!confirmDelete) return;
+
     try {
-      // TODO: Implementar deleteLoan no hook useLoans
-      // await deleteLoan(loanId);
+      console.log('🗑️ Excluindo empréstimo:', loanId);
+      await deleteLoan(loanId);
 
       // Se o empréstimo excluído estava selecionado, voltar para a lista
       if (selectedLoan?.id === loanId) {
@@ -141,10 +152,10 @@ function App() {
         setCurrentView('loans');
       }
 
-      await refetchLoans();
-      alert('Funcionalidade de exclusão de empréstimo em desenvolvimento');
+      console.log('✅ Empréstimo excluído com sucesso!');
+      alert(`Empréstimo de ${loan.clientName} excluído com sucesso!`);
     } catch (error) {
-      console.error('Erro ao excluir empréstimo:', error);
+      console.error('❌ Erro ao excluir empréstimo:', error);
       alert('Erro ao excluir empréstimo. Tente novamente.');
     }
   };
