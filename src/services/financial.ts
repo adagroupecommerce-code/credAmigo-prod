@@ -48,6 +48,8 @@ export interface DREData {
  */
 export async function getFinancialOverview(): Promise<FinancialOverview> {
   try {
+    console.log('🔄 [FINANCEIRO] Carregando dados financeiros...');
+
     // 1. Buscar saldo total das contas
     const { data: accounts } = await supabase
       .from('cash_accounts')
@@ -55,6 +57,7 @@ export async function getFinancialOverview(): Promise<FinancialOverview> {
       .eq('is_active', true);
 
     const totalBalance = accounts?.reduce((sum, acc) => sum + Number(acc.balance), 0) || 0;
+    console.log(`💰 [FINANCEIRO] Saldo total: R$ ${totalBalance.toFixed(2)}`);
 
     // 2. Buscar empréstimos ativos
     const { data: loans } = await supabase
@@ -63,6 +66,7 @@ export async function getFinancialOverview(): Promise<FinancialOverview> {
       .eq('status', 'active');
 
     const totalLoansValue = loans?.reduce((sum, loan) => sum + Number(loan.amount), 0) || 0;
+    console.log(`💳 [FINANCEIRO] Total emprestado: R$ ${totalLoansValue.toFixed(2)} (${loans?.length || 0} empréstimos)`);
 
     // 3. Buscar parcelas pagas no mês atual
     const now = new Date();
@@ -106,6 +110,11 @@ export async function getFinancialOverview(): Promise<FinancialOverview> {
 
     const netProfit = monthlyRevenue - monthlyExpenses;
 
+    console.log(`📊 [FINANCEIRO] Receita mensal: R$ ${monthlyRevenue.toFixed(2)}`);
+    console.log(`📊 [FINANCEIRO] A receber: R$ ${totalReceivable.toFixed(2)}`);
+    console.log(`📊 [FINANCEIRO] Total recebido: R$ ${totalReceived.toFixed(2)}`);
+    console.log(`✅ [FINANCEIRO] Dados carregados com sucesso!`);
+
     return {
       totalBalance,
       monthlyRevenue,
@@ -117,7 +126,7 @@ export async function getFinancialOverview(): Promise<FinancialOverview> {
       cashInBank: totalBalance
     };
   } catch (error) {
-    console.error('Erro ao buscar visão geral financeira:', error);
+    console.error('❌ [FINANCEIRO] Erro ao buscar visão geral financeira:', error);
     throw error;
   }
 }

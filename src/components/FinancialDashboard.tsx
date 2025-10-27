@@ -11,36 +11,44 @@ const FinancialDashboard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    console.log('🎬 [DASHBOARD] Módulo Financeiro inicializado');
     loadFinancialData();
 
     // Atualizar dados a cada 10 segundos
     const interval = setInterval(() => {
+      console.log('⏰ [DASHBOARD] Auto-refresh (10s)');
       loadFinancialData();
     }, 10000);
 
     // Escutar evento de empréstimo criado
     const handleLoanCreated = (event: any) => {
-      console.log('🔔 Módulo Financeiro: Empréstimo criado detectado', event.detail);
+      console.log('🔔 [DASHBOARD] Evento loan-created recebido!', event.detail);
+      console.log('⏳ [DASHBOARD] Aguardando 2 segundos antes de recarregar...');
       setTimeout(() => {
+        console.log('🔄 [DASHBOARD] Recarregando dados após evento loan-created');
         loadFinancialData();
       }, 2000);
     };
 
     // Escutar evento de pagamento realizado
     const handlePaymentMade = (event: any) => {
-      console.log('🔔 Módulo Financeiro: Pagamento realizado detectado', event.detail);
+      console.log('🔔 [DASHBOARD] Evento payment-made recebido!', event.detail);
+      console.log('⏳ [DASHBOARD] Aguardando 1 segundo antes de recarregar...');
       setTimeout(() => {
+        console.log('🔄 [DASHBOARD] Recarregando dados após evento payment-made');
         loadFinancialData();
       }, 1000);
     };
 
     window.addEventListener('loan-created', handleLoanCreated);
     window.addEventListener('payment-made', handlePaymentMade);
+    console.log('✅ [DASHBOARD] Event listeners registrados (loan-created, payment-made)');
 
     return () => {
       clearInterval(interval);
       window.removeEventListener('loan-created', handleLoanCreated);
       window.removeEventListener('payment-made', handlePaymentMade);
+      console.log('🛑 [DASHBOARD] Event listeners removidos');
     };
   }, []);
 
@@ -51,11 +59,15 @@ const FinancialDashboard = () => {
 
   const loadFinancialData = async () => {
     try {
+      console.log('🔄 [DASHBOARD] Iniciando carregamento de dados financeiros...');
       const data = await getFinancialOverview();
       setFinancialData(data);
-      console.log('✅ Dados financeiros atualizados:', data);
+      console.log('✅ [DASHBOARD] Dados financeiros atualizados no estado');
+      console.log('📊 [DASHBOARD] Saldo:', data.totalBalance);
+      console.log('📊 [DASHBOARD] Total Emprestado:', data.totalLoansValue);
+      console.log('📊 [DASHBOARD] A Receber:', data.totalReceivable);
     } catch (error) {
-      console.error('❌ Erro ao carregar dados financeiros:', error);
+      console.error('❌ [DASHBOARD] Erro ao carregar dados financeiros:', error);
     } finally {
       setLoading(false);
     }

@@ -69,15 +69,18 @@ export const useLoans = () => {
         installment_plan: loanData.installmentPlan || null
       });
 
-      console.log('✅ Empréstimo criado com sucesso:', result);
+      console.log('✅ [HOOK] Empréstimo criado com sucesso:', result);
 
       // Recarregar lista de empréstimos
       await fetchLoans();
 
       // Disparar evento para notificar outros componentes
-      window.dispatchEvent(new CustomEvent('loan-created', {
+      console.log('📢 [HOOK] Disparando evento loan-created para:', result.id);
+      const event = new CustomEvent('loan-created', {
         detail: { loanId: result.id }
-      }));
+      });
+      window.dispatchEvent(event);
+      console.log('✅ [HOOK] Evento loan-created disparado com sucesso');
 
       return result;
     } catch (err) {
