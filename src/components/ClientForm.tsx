@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Upload, X, User, Phone, Mail, MapPin, Building, FileText, Camera, CreditCard, Save, Eye, Download } from 'lucide-react';
+import { ArrowLeft, Upload, X, User, Phone, Mail, MapPin, Building, FileText, Camera, CreditCard, Save, Eye, Download, Loader2 } from 'lucide-react';
 import { Client } from '../types';
+import { uploadDocument, deleteDocument } from '../services/documents';
 
 interface ClientFormProps {
   client?: Client;
@@ -41,6 +42,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ client, onSave, onCancel, isEdi
   const [uploadedFiles, setUploadedFiles] = useState<{ [key: string]: File }>({});
   const [activeTab, setActiveTab] = useState('personal');
   const [viewingDocument, setViewingDocument] = useState<{ type: string; url: string; label: string } | null>(null);
+  const [uploadingFiles, setUploadingFiles] = useState<{ [key: string]: boolean }>({});
 
   const handleInputChange = (field: string, value: string, section?: string) => {
     if (section) {
@@ -56,18 +58,54 @@ const ClientForm: React.FC<ClientFormProps> = ({ client, onSave, onCancel, isEdi
     }
   };
 
-  const handleFileUpload = (documentType: string, file: File) => {
-    setUploadedFiles(prev => ({ ...prev, [documentType]: file }));
-    setFormData(prev => ({
-      ...prev,
-      documents: {
-        ...prev.documents,
-        [documentType]: file.name
+  const handleFileUpload = async (documentType: string, file: File) => {
+    // Gerar ID temporário se for cliente novo
+    const clientId = client?.id || `temp_${Date.now()}`;
+
+    try {
+      console.log(`📤 Iniciando upload de ${documentType}...`);
+      setUploadingFiles(prev => ({ ...prev, [documentType]: true }));
+
+      // Fazer upload para Supabase Storage
+      const publicUrl = await uploadDocument(file, clientId, documentType);
+
+      if (!publicUrl) {
+        throw new Error('Falha ao fazer upload do documento');
       }
-    }));
+
+      console.log(`✅ Upload concluído: ${publicUrl}`);
+
+      // Atualizar estado com a URL pública
+      setUploadedFiles(prev => ({ ...prev, [documentType]: file }));
+      setFormData(prev => ({
+        ...prev,
+        documents: {
+          ...prev.documents,
+          [documentType]: publicUrl
+        }
+      }));
+
+      alert(`Documento "${documentType}" enviado com sucesso!`);
+    } catch (error) {
+      console.error('❌ Erro no upload:', error);
+      alert(`Erro ao enviar documento: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    } finally {
+      setUploadingFiles(prev => ({ ...prev, [documentType]: false }));
+    }
   };
 
-  const removeFile = (documentType: string) => {
+  const removeFile = async (documentType: string) => {
+    const documentUrl = formData.documents?.[documentType as keyof typeof formData.documents];
+
+    // Se for uma URL do Supabase, tentar remover do storage
+    if (documentUrl && typeof documentUrl === 'string' && documentUrl.includes('supabase')) {
+      const confirmDelete = window.confirm('Deseja remover este documento do servidor?');
+      if (confirmDelete) {
+        console.log('🗑️ Removendo documento do storage...');
+        await deleteDocument(documentUrl);
+      }
+    }
+
     setUploadedFiles(prev => {
       const newFiles = { ...prev };
       delete newFiles[documentType];
@@ -199,7 +237,12 @@ const ClientForm: React.FC<ClientFormProps> = ({ client, onSave, onCancel, isEdi
           )}
         </div>
         
-        {hasFile ? (
+        {uploadingFiles[type] ? (
+          <div className="flex items-center justify-center gap-2 p-4 bg-blue-50 border border-blue-200 rounded">
+            <Loader2 size={20} className="text-blue-600 animate-spin" />
+            <span className="text-sm text-blue-800">Enviando arquivo...</span>
+          </div>
+        ) : hasFile ? (
           <div className="space-y-2">
             <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded">
               <FileText size={16} className="text-green-600" />
