@@ -11,7 +11,6 @@ const CashFlowManagement = () => {
 
   useEffect(() => {
     console.log('🎬 [FLUXO] Fluxo de Caixa inicializado');
-    loadCashFlowProjection();
 
     // Auto-refresh a cada 15 segundos
     const interval = setInterval(() => {
@@ -48,13 +47,19 @@ const CashFlowManagement = () => {
   const loadCashFlowProjection = async () => {
     try {
       console.log('🔄 [FLUXO] Carregando projeção de fluxo de caixa...');
+      console.log(`📌 [FLUXO] Filtro atual: ${periodFilter}`);
+
       const months = periodFilter === 'current' ? 1 :
                      periodFilter === '3months' ? 3 :
                      periodFilter === '6months' ? 6 : 12;
 
+      console.log(`📊 [FLUXO] Solicitando ${months} meses ao serviço`);
       const data = await getCashFlowProjection(months);
+
+      console.log(`✅ [FLUXO] ${data.length} meses carregados com sucesso`);
+      console.log(`📋 [FLUXO] Dados recebidos:`, data.map(d => d.monthName).join(', '));
+
       setProjections(data);
-      console.log(`✅ [FLUXO] ${data.length} meses carregados`);
     } catch (error) {
       console.error('❌ [FLUXO] Erro ao carregar projeção:', error);
     } finally {
@@ -137,14 +142,20 @@ const CashFlowManagement = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Fluxo de Caixa</h2>
-          <p className="text-sm text-gray-600 mt-1">Projeção de entradas e saídas</p>
+          <p className="text-sm text-gray-600 mt-1">
+            Projeção de entradas e saídas • {projections.length} {projections.length === 1 ? 'mês' : 'meses'}
+          </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
           {/* Filtro de Período */}
           <select
             value={periodFilter}
-            onChange={(e) => setPeriodFilter(e.target.value as PeriodFilter)}
+            onChange={(e) => {
+              const newValue = e.target.value as PeriodFilter;
+              console.log(`🎯 [FLUXO] Usuário selecionou: ${newValue}`);
+              setPeriodFilter(newValue);
+            }}
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
           >
             <option value="current">Mês Atual</option>
