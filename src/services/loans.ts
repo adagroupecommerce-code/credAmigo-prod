@@ -187,122 +187,116 @@ export async function updateLoan(id: string, patch: Partial<{
 }
 
 export async function deleteLoan(id: string) {
+  const { error } = await supabase.from('loans').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteLoanWithReversal(id: string) {
   console.log('🗑️ [DELETE LOAN] Iniciando exclusão do empréstimo:', id);
 
-  // 1. Buscar empréstimo para obter dados
+  // 1. Buscar empréstimo
   const loan = await getLoanById(id);
   if (!loan) {
     throw new Error('Empréstimo não encontrado');
   }
 
-  console.log('📊 [DELETE LOAN] Empréstimo encontrado:', {
+  console.log('📊 [DELETE LOAN] Empréstimo:', {
     amount: loan.amount,
     account_id: loan.account_id
   });
 
-  // 2. Se o empréstimo tem conta associada, reverter o dinheiro
+  // 2. Buscar conta ativa
+  let targetAccount = null;
+
   if (loan.account_id) {
-    try {
-      console.log('💰 [DELETE LOAN] Revertendo valor para conta:', loan.account_id);
+    const { data: account } = await supabase
+      .from('cash_accounts')
+      .select('id, name, balance')
+      .eq('id', loan.account_id)
+      .eq('is_active', true)
+      .maybeSingle();
+    targetAccount = account;
+  }
 
-      // Buscar conta
-      const { data: account, error: accountError } = await supabase
-        .from('cash_accounts')
-        .select('id, name, balance')
-        .eq('id', loan.account_id)
-        .maybeSingle();
+  if (!targetAccount) {
+    console.log('⚠️ [DELETE LOAN] Buscando conta padrão...');
+    const { data: accounts } = await supabase
+      .from('cash_accounts')
+      .select('id, name, balance')
+      .eq('is_active', true)
+      .order('balance', { ascending: false })
+      .limit(1);
 
-      if (accountError) {
-        console.error('❌ [DELETE LOAN] Erro ao buscar conta:', accountError);
-      } else if (account) {
-        // Devolver o dinheiro para a conta
-        const currentBalance = Number(account.balance);
-        const newBalance = currentBalance + loan.amount;
-
-        const { error: updateError } = await supabase
-          .from('cash_accounts')
-          .update({ balance: newBalance })
-          .eq('id', account.id);
-
-        if (updateError) {
-          console.error('❌ [DELETE LOAN] Erro ao atualizar saldo:', updateError);
-        } else {
-          console.log(`✅ [DELETE LOAN] Saldo devolvido: ${account.name}`);
-          console.log(`   Anterior: R$ ${currentBalance.toFixed(2)}`);
-          console.log(`   Devolvido: R$ ${loan.amount.toFixed(2)}`);
-          console.log(`   Novo: R$ ${newBalance.toFixed(2)}`);
-
-          // Criar transação de entrada (devolução/estorno)
-          const { error: transactionError } = await supabase
-            .from('transactions')
-            .insert({
-              account_id: account.id,
-              type: 'income',
-              category: 'Empréstimos',
-              subcategory: 'Estorno de Empréstimo',
-              amount: loan.amount,
-              description: `Estorno - Empréstimo excluído - ID: ${id}`,
-              date: new Date().toISOString().split('T')[0],
-              reference: `LOAN-CANCEL-${id}`,
-              tags: ['empréstimo', 'estorno', 'exclusão']
-            });
-
-          if (transactionError) {
-            console.error('❌ [DELETE LOAN] Erro ao criar transação de estorno:', transactionError);
-          } else {
-            console.log('✅ [DELETE LOAN] Transação de estorno criada');
-          }
-        }
-      } else {
-        console.warn('⚠️ [DELETE LOAN] Conta não encontrada:', loan.account_id);
-      }
-    } catch (error) {
-      console.error('❌ [DELETE LOAN] Erro ao processar reversão financeira:', error);
+    if (accounts && accounts.length > 0) {
+      targetAccount = accounts[0];
+      console.log('✅ [DELETE LOAN] Usando:', targetAccount.name);
     }
+  }
+
+  // 3. Reverter dinheiro
+  if (!targetAccount) {
+    throw new Error('Nenhuma conta bancária ativa encontrada');
+  }
+
+  console.log('💰 [DELETE LOAN] Revertendo para:', targetAccount.name);
+
+  const currentBalance = Number(targetAccount.balance);
+  const loanAmount = Number(loan.amount);
+  const newBalance = currentBalance + loanAmount;
+
+  const { error: updateError } = await supabase
+    .from('cash_accounts')
+    .update({ balance: newBalance })
+    .eq('id', targetAccount.id);
+
+  if (updateError) {
+    console.error('❌ [DELETE LOAN] Erro ao atualizar saldo:', updateError);
+    throw new Error('Falha ao reverter valor para conta');
+  }
+
+  console.log(`✅ [DELETE LOAN] Saldo atualizado: ${targetAccount.name}`);
+  console.log(`   Anterior: R$ ${currentBalance.toFixed(2)}`);
+  console.log(`   Devolvido: R$ ${loanAmount.toFixed(2)}`);
+  console.log(`   Novo: R$ ${newBalance.toFixed(2)}`);
+
+  // 4. Criar transação de estorno
+  const { error: transactionError } = await supabase
+    .from('transactions')
+    .insert({
+      account_id: targetAccount.id,
+      type: 'income',
+      category: 'Empréstimos',
+      subcategory: 'Estorno de Empréstimo',
+      amount: loanAmount,
+      description: `Estorno - Empréstimo excluído`,
+      date: new Date().toISOString().split('T')[0],
+      reference: `LOAN-CANCEL-${id}`,
+      tags: ['empréstimo', 'estorno']
+    });
+
+  if (transactionError) {
+    console.error('❌ [DELETE LOAN] Erro ao criar transação:', transactionError);
   } else {
-    console.log('⚠️ [DELETE LOAN] Empréstimo sem conta associada, pulando reversão');
+    console.log('✅ [DELETE LOAN] Transação de estorno criada');
   }
 
-  // 3. Excluir parcelas associadas
-  try {
-    console.log('🗑️ [DELETE LOAN] Excluindo parcelas...');
-    const { error: paymentsError } = await supabase
-      .from('payments')
-      .delete()
-      .eq('loan_id', id);
+  // 5. Excluir parcelas
+  console.log('🗑️ [DELETE LOAN] Excluindo parcelas...');
+  await supabase.from('payments').delete().eq('loan_id', id);
+  console.log('✅ [DELETE LOAN] Parcelas excluídas');
 
-    if (paymentsError) {
-      console.error('❌ [DELETE LOAN] Erro ao excluir parcelas:', paymentsError);
-    } else {
-      console.log('✅ [DELETE LOAN] Parcelas excluídas');
-    }
-  } catch (error) {
-    console.error('❌ [DELETE LOAN] Erro ao excluir parcelas:', error);
-  }
+  // 6. Excluir transação original
+  console.log('🗑️ [DELETE LOAN] Excluindo transação original...');
+  await supabase.from('transactions').delete().eq('reference', `LOAN-${id}`);
+  console.log('✅ [DELETE LOAN] Transação original excluída');
 
-  // 4. Excluir transação original do empréstimo
-  try {
-    console.log('🗑️ [DELETE LOAN] Excluindo transação original...');
-    const { error: txError } = await supabase
-      .from('transactions')
-      .delete()
-      .eq('reference', `LOAN-${id}`);
-
-    if (txError) {
-      console.error('❌ [DELETE LOAN] Erro ao excluir transação:', txError);
-    } else {
-      console.log('✅ [DELETE LOAN] Transação original excluída');
-    }
-  } catch (error) {
-    console.error('❌ [DELETE LOAN] Erro ao excluir transação:', error);
-  }
-
-  // 5. Excluir empréstimo
-  console.log('🗑️ [DELETE LOAN] Excluindo empréstimo do banco...');
+  // 7. Excluir empréstimo
+  console.log('🗑️ [DELETE LOAN] Excluindo empréstimo...');
   const { error } = await supabase.from('loans').delete().eq('id', id);
   if (error) throw error;
 
   console.log('✅ [DELETE LOAN] Empréstimo excluído com sucesso!');
+  console.log('📢 [DELETE LOAN] Reversão financeira concluída!');
 }
 
 /**

@@ -137,14 +137,18 @@ function App() {
     const confirmDelete = window.confirm(
       `Tem certeza que deseja EXCLUIR permanentemente o empréstimo de ${loan.clientName}?\n\n` +
       `Valor: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(loan.amount)}\n\n` +
-      `Esta ação não pode ser desfeita!`
+      `Esta ação não pode ser desfeita!\n\n` +
+      `O valor será devolvido para a conta bancária.`
     );
 
     if (!confirmDelete) return;
 
     try {
       console.log('🗑️ Excluindo empréstimo:', loanId);
-      await deleteLoan(loanId);
+
+      // Importar função de exclusão com reversão financeira
+      const { deleteLoanWithReversal } = await import('./services/loans');
+      await deleteLoanWithReversal(loanId);
 
       // Se o empréstimo excluído estava selecionado, voltar para a lista
       if (selectedLoan?.id === loanId) {
@@ -152,8 +156,14 @@ function App() {
         setCurrentView('loans');
       }
 
+      // Recarregar loans e atualizar dashboard
+      await refetchLoans();
+
       console.log('✅ Empréstimo excluído com sucesso!');
-      alert(`Empréstimo de ${loan.clientName} excluído com sucesso!`);
+      alert(`Empréstimo de ${loan.clientName} excluído com sucesso!\n\nO valor foi devolvido para a conta bancária.`);
+
+      // Disparar evento para atualizar módulo financeiro
+      window.dispatchEvent(new CustomEvent('financial-update'));
     } catch (error) {
       console.error('❌ Erro ao excluir empréstimo:', error);
       alert('Erro ao excluir empréstimo. Tente novamente.');
