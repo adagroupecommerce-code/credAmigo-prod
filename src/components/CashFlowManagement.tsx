@@ -46,6 +46,7 @@ const CashFlowManagement = () => {
 
   const loadCashFlowProjection = async () => {
     try {
+      setLoading(true);
       console.log('🔄 [FLUXO] Carregando projeção de fluxo de caixa...');
       console.log(`📌 [FLUXO] Filtro atual: ${periodFilter}`);
 
@@ -60,10 +61,12 @@ const CashFlowManagement = () => {
       console.log(`📋 [FLUXO] Dados recebidos:`, data.map(d => d.monthName).join(', '));
 
       setProjections(data);
+      console.log('💾 [FLUXO] Estado atualizado com novos dados');
     } catch (error) {
       console.error('❌ [FLUXO] Erro ao carregar projeção:', error);
     } finally {
       setLoading(false);
+      console.log('✅ [FLUXO] Loading finalizado');
     }
   };
 
@@ -77,6 +80,8 @@ const CashFlowManagement = () => {
   // Separar mês atual e futuros
   const currentMonth = projections[0];
   const futureMonths = projections.slice(1);
+
+  console.log(`🖼️ [FLUXO RENDER] Renderizando ${projections.length} meses`);
 
   const getTotalInflows = () => {
     return projections.reduce((sum, p) => sum + p.expectedRevenue, 0);

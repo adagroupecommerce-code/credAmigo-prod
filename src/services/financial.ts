@@ -134,12 +134,13 @@ export async function getFinancialOverview(): Promise<FinancialOverview> {
 /**
  * Busca projeção de fluxo de caixa (próximos 6 meses)
  */
-export async function getCashFlowProjection(): Promise<CashFlowProjection[]> {
+export async function getCashFlowProjection(months: number = 6): Promise<CashFlowProjection[]> {
   try {
+    console.log(`🔄 [FLUXO SERVICE] Gerando projeção para ${months} meses...`);
     const projections: CashFlowProjection[] = [];
     const now = new Date();
 
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < months; i++) {
       const month = new Date(now.getFullYear(), now.getMonth() + i, 1);
       const firstDay = new Date(month.getFullYear(), month.getMonth(), 1);
       const lastDay = new Date(month.getFullYear(), month.getMonth() + 1, 0);
@@ -179,6 +180,7 @@ export async function getCashFlowProjection(): Promise<CashFlowProjection[]> {
       });
     }
 
+    console.log(`✅ [FLUXO SERVICE] ${projections.length} meses projetados`);
     return projections;
   } catch (error) {
     console.error('Erro ao buscar projeção de fluxo de caixa:', error);
