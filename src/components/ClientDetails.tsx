@@ -173,24 +173,47 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client, onBack, onEdit, o
 
     if (!confirmDelete) return;
 
-    console.log('🗑️ Excluindo documento:', label);
+    console.log('🗑️ Excluindo documento:', label, documentUrl);
 
-    const success = await deleteDocument(documentUrl as string);
+    // Verificar se é uma URL do Supabase Storage
+    const isSupabaseUrl = typeof documentUrl === 'string' && documentUrl.includes('supabase');
 
-    if (success) {
-      // Atualizar cliente removendo o documento
+    if (isSupabaseUrl) {
+      // Tentar excluir do storage (pode falhar se for URL antiga)
+      const success = await deleteDocument(documentUrl as string);
+      if (!success) {
+        console.warn('⚠️ Não foi possível excluir do storage (pode ser URL antiga), mas vamos remover do banco');
+      }
+    } else {
+      console.log('📝 Documento antigo (não é URL do Supabase), removendo apenas do banco');
+    }
+
+    // SEMPRE atualizar o banco de dados, independente do resultado acima
+    try {
+      const { updateClient } = await import('../services/clients');
+
+      // Criar novo objeto de documentos sem o documento removido
+      const newDocuments = { ...client.documents };
+      delete newDocuments[documentType as keyof typeof newDocuments];
+
+      // Atualizar no banco
+      await updateClient(client.id, {
+        documents: newDocuments
+      });
+
+      console.log('✅ Documento removido do banco de dados');
+
+      // Atualizar interface
       const updatedClient = {
         ...client,
-        documents: {
-          ...client.documents,
-          [documentType]: undefined
-        }
+        documents: newDocuments
       };
 
       onUpdateClient(updatedClient);
       alert(`Documento "${label}" excluído com sucesso!`);
-    } else {
-      alert(`Erro ao excluir documento: ${label}`);
+    } catch (error) {
+      console.error('❌ Erro ao atualizar banco:', error);
+      alert(`Erro ao excluir documento do banco de dados: ${label}`);
     }
   };
 

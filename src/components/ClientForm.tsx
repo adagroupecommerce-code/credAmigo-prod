@@ -153,29 +153,55 @@ const ClientForm: React.FC<ClientFormProps> = ({ client, onSave, onCancel, isEdi
 
     if (!confirmDelete) return;
 
-    console.log('🗑️ Excluindo documento:', label);
+    console.log('🗑️ Excluindo documento:', label, documentUrl);
 
-    const success = await deleteDocument(documentUrl as string);
+    // Verificar se é uma URL do Supabase Storage
+    const isSupabaseUrl = typeof documentUrl === 'string' && documentUrl.includes('supabase');
 
-    if (success) {
-      // Remover do estado
-      setUploadedFiles(prev => {
-        const newFiles = { ...prev };
-        delete newFiles[documentType];
-        return newFiles;
-      });
-      setFormData(prev => ({
-        ...prev,
-        documents: {
-          ...prev.documents,
-          [documentType]: undefined
-        }
-      }));
-
-      alert(`Documento "${label}" excluído com sucesso!`);
+    if (isSupabaseUrl) {
+      // Tentar excluir do storage (pode falhar se for URL antiga)
+      const success = await deleteDocument(documentUrl as string);
+      if (!success) {
+        console.warn('⚠️ Não foi possível excluir do storage (pode ser URL antiga), mas vamos remover do estado');
+      }
     } else {
-      alert(`Erro ao excluir documento: ${label}`);
+      console.log('📝 Documento antigo (não é URL do Supabase), removendo apenas do estado');
     }
+
+    // SEMPRE remover do estado, independente do resultado acima
+    setUploadedFiles(prev => {
+      const newFiles = { ...prev };
+      delete newFiles[documentType];
+      return newFiles;
+    });
+
+    setFormData(prev => ({
+      ...prev,
+      documents: {
+        ...prev.documents,
+        [documentType]: undefined
+      }
+    }));
+
+    // Se estiver editando um cliente existente, atualizar no banco também
+    if (client?.id) {
+      try {
+        const { updateClient } = await import('../services/clients');
+
+        const newDocuments = { ...formData.documents };
+        delete newDocuments[documentType as keyof typeof newDocuments];
+
+        await updateClient(client.id, {
+          documents: newDocuments
+        });
+
+        console.log('✅ Documento removido do banco de dados');
+      } catch (error) {
+        console.error('❌ Erro ao atualizar banco:', error);
+      }
+    }
+
+    alert(`Documento "${label}" excluído com sucesso!`);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
