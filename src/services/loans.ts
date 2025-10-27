@@ -140,18 +140,23 @@ export async function createLoan(payload: {
   // 4. Criar parcelas automaticamente usando o gerador SAC
   if (data) {
     try {
-      await createPaymentsForLoan({
+      console.log('🔄 Criando parcelas para empréstimo:', data.id);
+      const payments = await createPaymentsForLoan({
         id: data.id,
         amount: payload.amount,
         interestRate: payload.interest_rate,
         installments: payload.installments,
         startDate: payload.start_date
       });
+      console.log(`✅ ${payments?.length || payload.installments} parcelas criadas com sucesso!`);
     } catch (paymentError) {
-      console.error('❌ Erro ao criar parcelas automaticamente:', paymentError);
+      console.error('❌ ERRO CRÍTICO ao criar parcelas:', paymentError);
+      // Não falhar a criação do empréstimo, mas alertar o usuário
+      throw new Error(`Empréstimo criado mas falha ao gerar parcelas: ${paymentError}`);
     }
   }
 
+  console.log('✅ Empréstimo criado com sucesso:', data.id);
   return data;
 }
 

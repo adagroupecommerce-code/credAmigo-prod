@@ -40,23 +40,34 @@ const BillingDashboard: React.FC<BillingDashboardProps> = ({ onViewPayment, onDe
   const fetchPayments = async () => {
     setLoading(true);
     try {
+      console.log('🔄 Carregando parcelas do Supabase...');
       const rows = await getAllPayments();
+      console.log(`📊 ${rows?.length || 0} parcelas encontradas`);
 
-      // Se não houver parcelas, sincronizar automaticamente
-      if (!rows || rows.length === 0) {
-        console.log('⚠️ Nenhuma parcela encontrada. Sincronizando empréstimos...');
-        await syncAllLoansPayments();
+      // Verificar se há empréstimos sem parcelas
+      if (loans.length > 0) {
+        const loanIds = loans.map(l => l.id);
+        const loansWithPayments = new Set(rows.map(p => p.loanId));
+        const loansWithoutPayments = loanIds.filter(id => !loansWithPayments.has(id));
 
-        // Buscar novamente
-        const newRows = await getAllPayments();
-        setPayments(newRows);
-        console.log('✅ Sincronização concluída:', newRows.length, 'parcelas');
-      } else {
-        setPayments(rows);
-        console.log('✅ Payments loaded from Supabase:', rows.length);
+        if (loansWithoutPayments.length > 0) {
+          console.warn(`⚠️ ${loansWithoutPayments.length} empréstimo(s) sem parcelas detectado(s)`);
+          console.log('🔄 Sincronizando parcelas automaticamente...');
+
+          await syncAllLoansPayments();
+
+          // Recarregar parcelas
+          const newRows = await getAllPayments();
+          setPayments(newRows);
+          console.log(`✅ Sincronização concluída: ${newRows.length} parcelas totais`);
+          return;
+        }
       }
+
+      setPayments(rows);
+      console.log('✅ Parcelas carregadas com sucesso');
     } catch (e) {
-      console.error('Erro ao carregar pagamentos:', e);
+      console.error('❌ Erro ao carregar pagamentos:', e);
     } finally {
       setLoading(false);
     }
@@ -100,7 +111,20 @@ const BillingDashboard: React.FC<BillingDashboardProps> = ({ onViewPayment, onDe
       fetchPayments();
     }, 10000);
 
-    return () => clearInterval(interval);
+    // Escutar evento de empréstimo criado
+    const handleLoanCreated = (event: any) => {
+      console.log('🔔 Evento: Empréstimo criado detectado', event.detail);
+      setTimeout(() => {
+        fetchPayments();
+      }, 2000); // Aguardar 2s para garantir que as parcelas foram criadas
+    };
+
+    window.addEventListener('loan-created', handleLoanCreated);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('loan-created', handleLoanCreated);
+    };
   }, []);
 
   // Recarregar quando a lista de empréstimos mudar

@@ -74,6 +74,11 @@ export const useLoans = () => {
       // Recarregar lista de empréstimos
       await fetchLoans();
 
+      // Disparar evento para notificar outros componentes
+      window.dispatchEvent(new CustomEvent('loan-created', {
+        detail: { loanId: result.id }
+      }));
+
       return result;
     } catch (err) {
       console.error('❌ Erro ao criar empréstimo:', err);

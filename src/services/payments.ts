@@ -168,6 +168,11 @@ export async function markInstallmentPaid(
     console.warn('⚠️ Empréstimo sem conta vinculada. Transação não criada.');
   }
 
+  // Disparar evento para notificar outros componentes
+  window.dispatchEvent(new CustomEvent('payment-made', {
+    detail: { paymentId, amount: payload.total }
+  }));
+
   return mapToPayment(data as PaymentRow);
 }
 

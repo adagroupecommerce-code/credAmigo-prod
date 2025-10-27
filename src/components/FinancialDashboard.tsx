@@ -18,7 +18,30 @@ const FinancialDashboard = () => {
       loadFinancialData();
     }, 10000);
 
-    return () => clearInterval(interval);
+    // Escutar evento de empréstimo criado
+    const handleLoanCreated = (event: any) => {
+      console.log('🔔 Módulo Financeiro: Empréstimo criado detectado', event.detail);
+      setTimeout(() => {
+        loadFinancialData();
+      }, 2000);
+    };
+
+    // Escutar evento de pagamento realizado
+    const handlePaymentMade = (event: any) => {
+      console.log('🔔 Módulo Financeiro: Pagamento realizado detectado', event.detail);
+      setTimeout(() => {
+        loadFinancialData();
+      }, 1000);
+    };
+
+    window.addEventListener('loan-created', handleLoanCreated);
+    window.addEventListener('payment-made', handlePaymentMade);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('loan-created', handleLoanCreated);
+      window.removeEventListener('payment-made', handlePaymentMade);
+    };
   }, []);
 
   // Recarregar ao mudar de aba
