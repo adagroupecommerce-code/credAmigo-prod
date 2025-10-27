@@ -82,6 +82,22 @@ export async function markInstallmentPaid(
     penalty?: number;
   }
 ) {
+  // 1. Buscar informações do pagamento e empréstimo
+  const { data: paymentData, error: paymentError } = await supabase
+    .from('payments')
+    .select(`
+      id, loan_id, installment_number,
+      loans (
+        id, account_id, client_id,
+        clients ( name )
+      )
+    `)
+    .eq('id', paymentId)
+    .single();
+
+  if (paymentError) throw paymentError;
+
+  // 2. Atualizar status da parcela
   const { data, error } = await supabase
     .from('payments')
     .update({
@@ -100,6 +116,58 @@ export async function markInstallmentPaid(
     .single();
 
   if (error) throw error;
+
+  // 3. Criar transação de entrada e atualizar saldo da conta
+  const loan = paymentData.loans as any;
+  if (loan?.account_id) {
+    try {
+      // Criar transação de entrada
+      const { error: transactionError } = await supabase
+        .from('transactions')
+        .insert({
+          account_id: loan.account_id,
+          type: 'income',
+          category: 'Recebimentos',
+          subcategory: 'Pagamento de Parcela',
+          amount: payload.total,
+          description: `Parcela ${paymentData.installment_number} - ${loan.clients?.name || 'Cliente'}`,
+          date: payload.payment_date,
+          reference: `PAYMENT-${paymentId}`,
+          tags: ['pagamento', 'parcela']
+        });
+
+      if (transactionError) {
+        console.error('❌ Erro ao criar transação:', transactionError);
+      }
+
+      // Atualizar saldo da conta
+      const { data: accountData, error: accountError } = await supabase
+        .from('cash_accounts')
+        .select('balance')
+        .eq('id', loan.account_id)
+        .single();
+
+      if (!accountError && accountData) {
+        const newBalance = Number(accountData.balance) + payload.total;
+
+        const { error: updateError } = await supabase
+          .from('cash_accounts')
+          .update({ balance: newBalance })
+          .eq('id', loan.account_id);
+
+        if (updateError) {
+          console.error('❌ Erro ao atualizar saldo:', updateError);
+        } else {
+          console.log(`✅ Saldo atualizado: +R$ ${payload.total.toFixed(2)} = R$ ${newBalance.toFixed(2)}`);
+        }
+      }
+    } catch (txError) {
+      console.error('❌ Erro ao processar transação financeira:', txError);
+    }
+  } else {
+    console.warn('⚠️ Empréstimo sem conta vinculada. Transação não criada.');
+  }
+
   return mapToPayment(data as PaymentRow);
 }
 

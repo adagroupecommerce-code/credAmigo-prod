@@ -32,30 +32,49 @@ export async function createLoan(payload: {
   start_date: string;
   end_date: string;
   remaining_amount: number;
+  account_id?: string;
   status?: string;
   paid_installments?: number;
   notes?: string | null;
   installment_plan?: any;
 }) {
-  // 0. Validar saldo disponível em caixa
-  const { data: accounts, error: accountsError } = await supabase
-    .from('cash_accounts')
-    .select('id, name, balance')
-    .eq('is_active', true)
-    .order('balance', { ascending: false });
+  // 0. Selecionar conta (fornecida ou com maior saldo)
+  let selectedAccount;
 
-  if (accountsError) throw accountsError;
+  if (payload.account_id) {
+    // Usar conta especificada
+    const { data: accountData, error: accountError } = await supabase
+      .from('cash_accounts')
+      .select('id, name, balance')
+      .eq('id', payload.account_id)
+      .eq('is_active', true)
+      .single();
 
-  const totalBalance = accounts?.reduce((sum, acc) => sum + Number(acc.balance), 0) || 0;
+    if (accountError || !accountData) {
+      throw new Error('Conta bancária não encontrada ou inativa');
+    }
+    selectedAccount = accountData;
+  } else {
+    // Buscar conta com maior saldo
+    const { data: accounts, error: accountsError } = await supabase
+      .from('cash_accounts')
+      .select('id, name, balance')
+      .eq('is_active', true)
+      .order('balance', { ascending: false });
 
-  if (totalBalance < payload.amount) {
-    throw new Error(`Saldo insuficiente. Disponível: R$ ${totalBalance.toFixed(2)}, Necessário: R$ ${payload.amount.toFixed(2)}`);
+    if (accountsError) throw accountsError;
+
+    if (!accounts || accounts.length === 0) {
+      throw new Error('Nenhuma conta de caixa/banco ativa encontrada');
+    }
+
+    selectedAccount = accounts[0];
   }
 
-  // Selecionar conta com maior saldo
-  const mainAccount = accounts?.[0];
-  if (!mainAccount) {
-    throw new Error('Nenhuma conta de caixa/banco ativa encontrada');
+  // Validar saldo
+  const accountBalance = Number(selectedAccount.balance);
+  if (accountBalance < payload.amount) {
+    throw new Error(`Saldo insuficiente na conta ${selectedAccount.name}. Disponível: R$ ${accountBalance.toFixed(2)}, Necessário: R$ ${payload.amount.toFixed(2)}`);
   }
 
   // 1. Criar empréstimo
@@ -71,6 +90,7 @@ export async function createLoan(payload: {
       start_date: payload.start_date,
       end_date: payload.end_date,
       remaining_amount: payload.remaining_amount,
+      account_id: selectedAccount.id,
       status: payload.status ?? 'active',
       paid_installments: payload.paid_installments ?? 0,
       notes: payload.notes ?? null,
@@ -86,7 +106,7 @@ export async function createLoan(payload: {
     const { error: transactionError } = await supabase
       .from('transactions')
       .insert({
-        account_id: mainAccount.id,
+        account_id: selectedAccount.id,
         type: 'expense',
         category: 'Empréstimos',
         subcategory: 'Concessão de Empréstimo',
@@ -102,16 +122,16 @@ export async function createLoan(payload: {
     }
 
     // 3. Atualizar saldo da conta
-    const newBalance = Number(mainAccount.balance) - payload.amount;
+    const newBalance = accountBalance - payload.amount;
     const { error: updateError } = await supabase
       .from('cash_accounts')
       .update({ balance: newBalance })
-      .eq('id', mainAccount.id);
+      .eq('id', selectedAccount.id);
 
     if (updateError) {
       console.error('❌ Erro ao atualizar saldo:', updateError);
     } else {
-      console.log(`✅ Saldo atualizado: ${mainAccount.name} - R$ ${newBalance.toFixed(2)}`);
+      console.log(`✅ Saldo atualizado: ${selectedAccount.name} - R$ ${newBalance.toFixed(2)}`);
     }
   } catch (txError) {
     console.error('❌ Erro ao processar transação:', txError);

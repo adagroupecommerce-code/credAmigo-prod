@@ -18,8 +18,31 @@ const LoanForm: React.FC<LoanFormProps> = ({ clients, loan, onSave, onCancel, is
     interestRate: loan?.interestRate || 25,
     installments: loan?.installments || 1,
     startDate: loan?.startDate || new Date().toISOString().split('T')[0],
+    accountId: '',
     notes: loan?.notes || ''
   });
+
+  const [accounts, setAccounts] = useState<Array<{ id: string; name: string; balance: number }>>([]);
+
+  // Carregar contas bancárias
+  useEffect(() => {
+    loadAccounts();
+  }, []);
+
+  const loadAccounts = async () => {
+    try {
+      const { getCashAccounts } = await import('../services/financial');
+      const data = await getCashAccounts();
+      setAccounts(data);
+      // Selecionar conta com maior saldo por padrão
+      if (data.length > 0 && !formData.accountId) {
+        const sorted = [...data].sort((a, b) => Number(b.balance) - Number(a.balance));
+        setFormData(prev => ({ ...prev, accountId: sorted[0].id }));
+      }
+    } catch (error) {
+      console.error('Erro ao carregar contas:', error);
+    }
+  };
 
   const [calculationMode, setCalculationMode] = useState<'automatic' | 'manual'>('automatic');
   const [quickMode, setQuickMode] = useState<'preset' | 'custom'>('preset');
@@ -388,9 +411,35 @@ const LoanForm: React.FC<LoanFormProps> = ({ clients, loan, onSave, onCancel, is
 
             <div>
               <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
+                Conta Bancária <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formData.accountId}
+                onChange={(e) => handleInputChange('accountId', e.target.value)}
+                className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent touch-manipulation"
+                required
+              >
+                <option value="">Selecione uma conta</option>
+                {accounts.map(account => (
+                  <option key={account.id} value={account.id}>
+                    {account.name} - Saldo: {formatCurrency(Number(account.balance))}
+                  </option>
+                ))}
+              </select>
+              <div className="text-xs sm:text-sm text-gray-500 mt-1">
+                {formData.accountId && accounts.find(a => a.id === formData.accountId) && (
+                  <span>
+                    Saldo disponível: {formatCurrency(Number(accounts.find(a => a.id === formData.accountId)?.balance || 0))}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
                 Valor do Empréstimo <span className="text-red-500">*</span>
               </label>
-              
+
               <input
                 type="number"
                 value={formData.amount}
