@@ -93,35 +93,26 @@ const CashFlowManagement = () => {
     );
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Carregando projeção de fluxo de caixa...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Controles */}
+      {/* Cabeçalho */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div className="flex items-center gap-4">
-          <div className="flex bg-gray-100 rounded-lg p-1">
-            {(['daily', 'weekly', 'monthly'] as const).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setViewMode(mode)}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  viewMode === mode
-                    ? 'bg-white text-blue-600 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                {mode === 'daily' ? 'Diário' : mode === 'weekly' ? 'Semanal' : 'Mensal'}
-              </button>
-            ))}
-          </div>
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Projeção de Fluxo de Caixa</h2>
+          <p className="text-gray-600 mt-1">Projeção dos próximos 6 meses</p>
         </div>
         <div className="flex gap-2">
           <button className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
             <Download size={20} className="mr-2" />
             Exportar
-          </button>
-          <button className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-            <Plus size={20} className="mr-2" />
-            Nova Projeção
           </button>
         </div>
       </div>
@@ -157,109 +148,41 @@ const CashFlowManagement = () => {
         />
       </div>
 
-      {/* Filtros de Data */}
-      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-        <div className="flex flex-col md:flex-row gap-4 items-end">
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Data Inicial</label>
-            <input
-              type="date"
-              value={dateRange.start}
-              onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Data Final</label>
-            <input
-              type="date"
-              value={dateRange.end}
-              onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-          <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-            <Filter size={16} className="mr-2 inline" />
-            Filtrar
-          </button>
-        </div>
-      </div>
-
       {/* Projeção de Fluxo de Caixa */}
       <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-semibold text-gray-900">Projeção de Fluxo de Caixa</h2>
-          <div className="text-sm text-gray-500">
-            Período: {formatDate(dateRange.start)} - {formatDate(dateRange.end)}
-          </div>
-        </div>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Projeção Mensal</h3>
 
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="text-left px-4 py-3 text-sm font-semibold text-gray-900">Data</th>
-                <th className="text-left px-4 py-3 text-sm font-semibold text-gray-900">Saldo Inicial</th>
-                <th className="text-left px-4 py-3 text-sm font-semibold text-gray-900">Entradas</th>
-                <th className="text-left px-4 py-3 text-sm font-semibold text-gray-900">Saídas</th>
+                <th className="text-left px-4 py-3 text-sm font-semibold text-gray-900">Mês</th>
+                <th className="text-left px-4 py-3 text-sm font-semibold text-gray-900">Receitas Esperadas</th>
+                <th className="text-left px-4 py-3 text-sm font-semibold text-gray-900">Receitas Pagas</th>
+                <th className="text-left px-4 py-3 text-sm font-semibold text-gray-900">Despesas</th>
                 <th className="text-left px-4 py-3 text-sm font-semibold text-gray-900">Fluxo Líquido</th>
-                <th className="text-left px-4 py-3 text-sm font-semibold text-gray-900">Saldo Final</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {projections.map((projection, index) => (
                 <tr key={index} className="hover:bg-gray-50">
                   <td className="px-4 py-3 font-medium text-gray-900">
-                    {formatDate(projection.date)}
+                    {projection.monthName}
                   </td>
                   <td className="px-4 py-3 text-gray-600">
-                    {formatCurrency(projection.openingBalance)}
+                    {formatCurrency(projection.expectedRevenue)}
+                  </td>
+                  <td className="px-4 py-3 text-green-600 font-medium">
+                    {formatCurrency(projection.paidRevenue)}
+                  </td>
+                  <td className="px-4 py-3 text-red-600 font-medium">
+                    {formatCurrency(projection.expectedExpenses)}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="space-y-1">
-                      <div className="font-medium text-green-600">
-                        {formatCurrency(projection.inflows.total)}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        Pagamentos: {formatCurrency(projection.inflows.loanPayments)}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        Novos: {formatCurrency(projection.inflows.newLoans)}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        Outros: {formatCurrency(projection.inflows.other)}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="space-y-1">
-                      <div className="font-medium text-red-600">
-                        {formatCurrency(projection.outflows.total)}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        Desembolsos: {formatCurrency(projection.outflows.newLoanDisbursements)}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        Operacionais: {formatCurrency(projection.outflows.operationalExpenses)}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        Impostos: {formatCurrency(projection.outflows.taxes)}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        Outros: {formatCurrency(projection.outflows.other)}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className={`font-medium ${
+                    <div className={`font-bold ${
                       projection.netFlow >= 0 ? 'text-green-600' : 'text-red-600'
                     }`}>
                       {projection.netFlow >= 0 ? '+' : ''}{formatCurrency(projection.netFlow)}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="font-bold text-gray-900">
-                      {formatCurrency(projection.closingBalance)}
                     </div>
                   </td>
                 </tr>

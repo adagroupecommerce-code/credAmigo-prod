@@ -37,6 +37,27 @@ export async function createLoan(payload: {
   notes?: string | null;
   installment_plan?: any;
 }) {
+  // 0. Validar saldo disponível em caixa
+  const { data: accounts, error: accountsError } = await supabase
+    .from('cash_accounts')
+    .select('id, name, balance')
+    .eq('is_active', true)
+    .order('balance', { ascending: false });
+
+  if (accountsError) throw accountsError;
+
+  const totalBalance = accounts?.reduce((sum, acc) => sum + Number(acc.balance), 0) || 0;
+
+  if (totalBalance < payload.amount) {
+    throw new Error(`Saldo insuficiente. Disponível: R$ ${totalBalance.toFixed(2)}, Necessário: R$ ${payload.amount.toFixed(2)}`);
+  }
+
+  // Selecionar conta com maior saldo
+  const mainAccount = accounts?.[0];
+  if (!mainAccount) {
+    throw new Error('Nenhuma conta de caixa/banco ativa encontrada');
+  }
+
   // 1. Criar empréstimo
   const { data, error } = await supabase
     .from('loans')
@@ -55,12 +76,48 @@ export async function createLoan(payload: {
       notes: payload.notes ?? null,
       installment_plan: payload.installment_plan ?? null,
     })
-    .select('id')
+    .select('id, client_id')
     .single();
 
   if (error) throw error;
 
-  // 2. Criar parcelas automaticamente usando o gerador SAC
+  // 2. Criar transação de saída (empréstimo concedido)
+  try {
+    const { error: transactionError } = await supabase
+      .from('transactions')
+      .insert({
+        account_id: mainAccount.id,
+        type: 'expense',
+        category: 'Empréstimos',
+        subcategory: 'Concessão de Empréstimo',
+        amount: payload.amount,
+        description: `Empréstimo concedido - ID: ${data.id}`,
+        date: payload.start_date,
+        reference: `LOAN-${data.id}`,
+        tags: ['empréstimo', 'saída']
+      });
+
+    if (transactionError) {
+      console.error('❌ Erro ao criar transação:', transactionError);
+    }
+
+    // 3. Atualizar saldo da conta
+    const newBalance = Number(mainAccount.balance) - payload.amount;
+    const { error: updateError } = await supabase
+      .from('cash_accounts')
+      .update({ balance: newBalance })
+      .eq('id', mainAccount.id);
+
+    if (updateError) {
+      console.error('❌ Erro ao atualizar saldo:', updateError);
+    } else {
+      console.log(`✅ Saldo atualizado: ${mainAccount.name} - R$ ${newBalance.toFixed(2)}`);
+    }
+  } catch (txError) {
+    console.error('❌ Erro ao processar transação:', txError);
+  }
+
+  // 4. Criar parcelas automaticamente usando o gerador SAC
   if (data) {
     try {
       await createPaymentsForLoan({
@@ -72,7 +129,6 @@ export async function createLoan(payload: {
       });
     } catch (paymentError) {
       console.error('❌ Erro ao criar parcelas automaticamente:', paymentError);
-      // Não falha a criação do empréstimo se as parcelas falharem
     }
   }
 

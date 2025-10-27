@@ -1,13 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PieChart, TrendingUp, TrendingDown, Calendar, Download, Filter, BarChart3, DollarSign } from 'lucide-react';
-import { DREReport } from '../types/financial';
-import { mockDREReport } from '../data/financialData';
+import { getDREData, DREData } from '../services/financial';
 
 const DREManagement = () => {
-  const [selectedPeriod, setSelectedPeriod] = useState('2024-12');
-  const [compareMode, setCompareMode] = useState(false);
-  const [comparePeriod, setComparePeriod] = useState('2024-11');
-  const [dreData, setDreData] = useState<DREReport>(mockDREReport);
+  const now = new Date();
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
+  const [dreData, setDreData] = useState<DREData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadDREData();
+  }, [selectedYear, selectedMonth]);
+
+  const loadDREData = async () => {
+    setLoading(true);
+    try {
+      const data = await getDREData(selectedYear, selectedMonth);
+      setDreData(data);
+      console.log('✅ DRE carregado:', data);
+    } catch (error) {
+      console.error('❌ Erro ao carregar DRE:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -78,46 +95,56 @@ const DREManagement = () => {
     );
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Carregando DRE...</div>
+      </div>
+    );
+  }
+
+  if (!dreData) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-red-500">Erro ao carregar DRE</div>
+      </div>
+    );
+  }
+
+  const monthNames = [
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+  ];
+
   return (
     <div className="space-y-6">
-      {/* Controles */}
+      {/* Cabeçalho */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div className="flex items-center gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Período</label>
-            <input
-              type="month"
-              value={selectedPeriod}
-              onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="compareMode"
-              checked={compareMode}
-              onChange={(e) => setCompareMode(e.target.checked)}
-              className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-            />
-            <label htmlFor="compareMode" className="text-sm text-gray-700">Comparar períodos</label>
-          </div>
-          {compareMode && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Comparar com</label>
-              <input
-                type="month"
-                value={comparePeriod}
-                onChange={(e) => setComparePeriod(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-          )}
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">DRE - Demonstração do Resultado</h2>
+          <p className="text-gray-600 mt-1">{monthNames[selectedMonth]} {selectedYear}</p>
         </div>
         <div className="flex gap-2">
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(Number(e.target.value))}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+          >
+            {monthNames.map((name, idx) => (
+              <option key={idx} value={idx}>{name}</option>
+            ))}
+          </select>
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(Number(e.target.value))}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+          >
+            <option value={2024}>2024</option>
+            <option value={2025}>2025</option>
+          </select>
           <button className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
             <Download size={20} className="mr-2" />
-            Exportar DRE
+            Exportar
           </button>
         </div>
       </div>
@@ -125,35 +152,30 @@ const DREManagement = () => {
       {/* Métricas Principais */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
-          title="Receita Bruta"
+          title="Receita Total"
           value={formatCurrency(dreData.revenue.total)}
           percentage={formatPercentage(100)}
           icon={DollarSign}
           color="green"
-          trend="up"
+        />
+        <StatCard
+          title="Despesas Totais"
+          value={formatCurrency(dreData.expenses.total)}
+          icon={TrendingDown}
+          color="red"
         />
         <StatCard
           title="Lucro Bruto"
           value={formatCurrency(dreData.grossProfit)}
-          percentage={formatPercentage(dreData.margins.gross)}
-          icon={TrendingUp}
-          color="blue"
-          trend="up"
-        />
-        <StatCard
-          title="Lucro Operacional"
-          value={formatCurrency(dreData.operationalProfit)}
-          percentage={formatPercentage(dreData.margins.operational)}
           icon={BarChart3}
-          color="purple"
-          trend="up"
+          color="blue"
         />
         <StatCard
           title="Lucro Líquido"
           value={formatCurrency(dreData.netProfit)}
-          percentage={formatPercentage(dreData.margins.net)}
+          percentage={formatPercentage(dreData.profitMargin)}
           icon={PieChart}
-          color="green"
+          color={dreData.netProfit >= 0 ? 'green' : 'red'}
           trend="up"
         />
       </div>
