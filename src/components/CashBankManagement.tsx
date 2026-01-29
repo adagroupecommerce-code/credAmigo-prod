@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Eye, DollarSign, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownLeft, Filter, Search, Calendar } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, DollarSign, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownLeft, Filter, Search, Calendar, CheckSquare } from 'lucide-react';
 import { CashAccount, Transaction } from '../types/financial';
 import { TRANSACTION_CATEGORIES } from '../types/financial';
 import { listCashAccounts, createCashAccount, updateCashAccount, deleteCashAccount } from '@/services/cashAccounts';
 import { listTransactions, createTransaction, updateTransaction, deleteTransaction } from '@/services/transactions';
 import { useRBAC } from '../hooks/useRBAC';
 import { RBAC_RESOURCES, RBAC_ACTIONS } from '../types/rbac';
+import BankReconciliation from './BankReconciliation';
 
 const CashBankManagement = () => {
   const { hasPermission } = useRBAC();
@@ -20,6 +21,7 @@ const CashBankManagement = () => {
   const [selectedAccount, setSelectedAccount] = useState<string>('all');
   const [transactionFilter, setTransactionFilter] = useState<'all' | 'income' | 'expense'>('all');
   const [dateFilter, setDateFilter] = useState<string>('');
+  const [reconcilingAccount, setReconcilingAccount] = useState<CashAccount | null>(null);
 
   useEffect(() => {
     loadData();
@@ -303,17 +305,24 @@ const CashBankManagement = () => {
               </div>
               <div className="flex gap-2 mt-3">
                 <button
+                  onClick={() => setReconcilingAccount(account)}
+                  className="flex-1 px-2 py-1 border border-green-200 text-green-600 rounded text-sm hover:bg-green-50 transition-colors"
+                  title="Conciliar conta"
+                >
+                  <CheckSquare size={12} className="inline mr-1" />
+                  Conciliar
+                </button>
+                <button
                   onClick={() => handleEditAccount(account)}
                   disabled={!canEditAccounts}
-                  className={`flex-1 px-2 py-1 border rounded text-sm transition-colors ${
+                  className={`px-2 py-1 border rounded text-sm transition-colors ${
                     canEditAccounts
                       ? 'text-blue-600 border-blue-200 hover:bg-blue-50'
                       : 'text-gray-400 border-gray-200 cursor-not-allowed opacity-50'
                   }`}
                   title={!canEditAccounts ? 'Apenas administradores podem editar contas' : 'Editar conta'}
                 >
-                  <Edit size={12} className="inline mr-1" />
-                  Editar
+                  <Edit size={12} />
                 </button>
                 <button
                   disabled={!canEditAccounts}
@@ -672,6 +681,18 @@ const CashBankManagement = () => {
           </div>
         )}
       </div>
+
+      {/* Modal de Conciliação Bancária */}
+      {reconcilingAccount && (
+        <BankReconciliation
+          accountId={reconcilingAccount.id}
+          accountName={reconcilingAccount.name}
+          onClose={() => {
+            setReconcilingAccount(null);
+            loadData();
+          }}
+        />
+      )}
     </div>
   );
 };
